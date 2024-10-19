@@ -93,7 +93,8 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                                 //     // b: 1.0,
                                 //     a: 1.0,
                                 // }),
-                                load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                                // load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                load: wgpu::LoadOp::Load,
                                 store: wgpu::StoreOp::Store,
                             },
                         })],
@@ -117,7 +118,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 
                     // Render partial screen content
                     // render_pass.set_viewport(100.0, 100.0, 200.0, 200.0, 0.0, 1.0);
-                    render_pass.set_scissor_rect(100, 100, 200, 200);
+                    // render_pass.set_scissor_rect(100, 100, 200, 200);
 
                     render_pass.set_pipeline(
                         &handle
