@@ -5,32 +5,123 @@ use std::sync::{Arc, Mutex};
 
 use common_vector::basic::{rgb_to_wgpu, Point, WindowSize};
 use common_vector::dot::draw_dot;
-use common_vector::editor::{Editor, Viewport};
+use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::Polygon;
 use common_vector::vertex::Vertex;
 use floem::kurbo::Size;
 use floem::peniko::Color;
+use floem::reactive::create_signal;
 use floem::views::label;
 use floem::window::WindowConfig;
+use floem_renderer::gpu_resources::{self, GpuResources};
+use floem_winit::event::{ElementState, MouseButton};
 // use winit::{event_loop, window};
 use wgpu::util::DeviceExt;
 
 use floem::context::PaintState;
+// use floem::floem_reactive::SignalGet;
+use floem::reactive::{SignalGet, SignalUpdate};
+use floem::views::text;
 use floem::views::Decorators;
+use floem::views::{h_stack, svg, v_stack};
+use floem::WindowHandle;
+use floem::{
+    views::{button, dropdown},
+    IntoView,
+};
 use floem::{Application, CustomRenderCallback};
-use floem::{IntoView, WindowHandle};
-use wgpu::CommandEncoder;
+
+// Define an enum for our dropdown options
+#[derive(Clone, PartialEq, Debug)]
+enum DropdownOption {
+    Option1,
+    Option2,
+    Option3,
+}
+
+impl std::fmt::Display for DropdownOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DropdownOption::Option1 => write!(f, "Option 1"),
+            DropdownOption::Option2 => write!(f, "Option 2"),
+            DropdownOption::Option3 => write!(f, "Option 3"),
+        }
+    }
+}
 
 fn app_view() -> impl IntoView {
-    // let (counter, mut set_counter) = create_signal(0);
-    // let (selected_option, set_selected_option) = create_signal(DropdownOption::Option1);
+    let (counter, mut set_counter) = create_signal(0);
+    let (selected_option, set_selected_option) = create_signal(DropdownOption::Option1);
 
-    // println!("selected_option {:?}", selected_option.get());
+    println!("selected_option {:?}", selected_option.get());
 
-    (label(move || format!("Hello there!"))
-        .style(|s| s.margin_bottom(10).color(Color::rgb(0.5, 0.5, 0.5))),)
+    (
+        label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
+        (
+            styled_button("Increment", "plus", move || set_counter += 1),
+            styled_button("Decrement", "minus", move || set_counter -= 1),
+        )
+            .style(|s| s.flex_col().gap(10).margin_top(10)),
+        dropdown::dropdown(
+            // Active item (currently selected option)
+            move || {
+                let see = selected_option.get();
+                println!("see {:?}", see);
+                see
+            },
+            // Main view (what's always visible)
+            |option: DropdownOption| Box::new(label(move || format!("Selected: {}", option))),
+            // Iterator of all options
+            vec![
+                DropdownOption::Option1,
+                DropdownOption::Option2,
+                DropdownOption::Option3,
+            ],
+            // List item view (how each option in the dropdown is displayed)
+            // move |option: DropdownOption| {
+            //     let option_clone = option.clone();
+            //     Box::new(button(option.to_string()).action(move || {
+            //         println!("DropdownOption {:?}", option_clone.clone());
+            //         set_selected_option.set(option_clone.clone());
+            //     }))
+            // },
+            move |m| text(m.to_string()).into_any(),
+        )
+        .on_accept(move |new| set_selected_option.set(new)),
+    )
         .style(|s| s.flex_col().items_center())
+}
+
+fn create_icon(name: &str) -> String {
+    match name {
+        "plus" => r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="none" d="M0 0h24v24H0z"/><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>"#.to_string(),
+        "minus" => r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="none" d="M0 0h24v24H0z"/><path d="M5 11h14v2H5z"/></svg>"#.to_string(),
+        _ => "".to_string(),
+    }
+}
+
+fn styled_button(
+    text: &'static str,
+    icon_name: &'static str,
+    action: impl FnMut() + 'static,
+) -> impl IntoView {
+    // button(text)
+    button(v_stack((
+        svg(create_icon(icon_name)).style(|s| s.width(24).height(24)),
+        label(move || text),
+    )))
+    .action(action)
+    .style(|s| {
+        s.width(70)
+            .height(70)
+            .border_radius(15)
+            .box_shadow_blur(15)
+            .box_shadow_spread(4)
+            .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.16))
+            // .transition("all 0.2s")
+            .hover(|s| s.box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.32)))
+    })
 }
 
 type RenderCallback<'a> = dyn for<'b> Fn(wgpu::CommandEncoder, wgpu::SurfaceTexture, wgpu::TextureView, &WindowHandle)
@@ -58,7 +149,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 
                 // TODO: draw buffers here
 
-                println!("Redraw");
+                // println!("Redraw");
                 // editor.draw(&mut renderer, &surface, &device);
 
                 // // TODO: overwriting other frame?
@@ -163,7 +254,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         .as_ref()
                         .expect("Couldn't get window size");
 
-                    println!("Render size {:?}", window_size);
+                    // println!("Render size {:?}", window_size);
 
                     if let Some(edge_point) = editor.hover_point {
                         let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
@@ -226,6 +317,43 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
             // }
         },
     )
+}
+
+fn handle_cursor_moved(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    window_size: WindowSize,
+) -> Option<Box<dyn Fn(f64, f64)>> {
+    Some(Box::new(move |positionX: f64, positionY: f64| {
+        let mut editor = editor.lock().unwrap();
+        editor.handle_mouse_move(
+            &window_size,
+            &gpu_resources.device,
+            positionX as f32,
+            positionY as f32,
+        );
+    }))
+}
+
+fn handle_mouse_input(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    window_size: WindowSize,
+) -> Option<Box<dyn Fn(MouseButton, ElementState)>> {
+    Some(Box::new(move |button, state| {
+        let mut editor = editor.lock().unwrap();
+        if button == MouseButton::Left {
+            match state {
+                ElementState::Pressed => editor.handle_mouse_down(
+                    // mouse_position.0,
+                    // mouse_position.1,
+                    &window_size,
+                    &gpu_resources.device,
+                ),
+                ElementState::Released => editor.handle_mouse_up(),
+            }
+        }
+    }))
 }
 
 fn main() {
@@ -436,6 +564,13 @@ fn main() {
                 println!("Initialized...");
 
                 let mut mouse_position = (0.0, 0.0);
+
+                // let device = std::sync::Arc::new(gpu_resources.device);
+
+                window_handle.handle_cursor_moved =
+                    handle_cursor_moved(editor.clone(), gpu_resources.clone(), window_size);
+                window_handle.handle_mouse_input =
+                    handle_mouse_input(editor.clone(), gpu_resources.clone(), window_size);
 
                 // test items
                 let mut editor = editor.lock().unwrap();
