@@ -1,0 +1,12 @@
+[package]
+name = "sensor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = "1.19.0"
+wgpu = "22.1.0"
+floem = { path = "C:/Users/alext/projects/common/common-floem" }
+floem_renderer = { path = "C:/Users/alext/projects/common/common-floem/renderer", version = "0.1.0" }
+crossbeam = "0.8.4"
+common-vector = { path = "C:/Users/alext/projects/common/common-vector" }
