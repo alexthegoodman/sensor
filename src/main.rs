@@ -7,7 +7,7 @@ use common_vector::basic::{rgb_to_wgpu, Point, WindowSize};
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
-use common_vector::polygon::Polygon;
+use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
 use floem::event::EventListener;
 use floem::kurbo::Size;
@@ -65,20 +65,17 @@ impl Handler {
         &mut self,
         gpu_resources: Arc<GpuResources>,
         window_size: WindowSize,
+        polygon_config: PolygonConfig,
     ) {
         let handler = Box::new(move |mut editor: MutexGuard<'_, Editor>| {
             println!("Button clicked, attempting to add polygon...");
             editor.polygons.push(Polygon::new(
                 &window_size,
                 &gpu_resources.device,
-                vec![
-                    Point { x: 0.0, y: 0.0 },
-                    Point { x: 1.0, y: 0.0 },
-                    Point { x: 0.5, y: 1.0 },
-                ],
-                (100.0, 100.0),
-                Point { x: 50.0, y: 50.0 },
-                5.0,
+                polygon_config.points.clone(),
+                polygon_config.dimensions,
+                polygon_config.position,
+                polygon_config.border_radius,
             ));
             println!("Polygon added successfully.");
         });
@@ -101,7 +98,9 @@ impl Handler {
 
 fn app_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     mut handler: std::sync::Arc<Mutex<Handler>>,
+    mut square_handler: std::sync::Arc<Mutex<Handler>>,
 ) -> impl IntoView {
     let (counter, mut set_counter) = create_signal(0);
     let (selected_option, set_selected_option) = create_signal(DropdownOption::Option1);
@@ -123,6 +122,17 @@ fn app_view(
                 //     handle_click(editor);
                 // }
                 handler.handle_button_click(editor);
+            }),
+            styled_button("Add Square", "plus", move || {
+                let mut editor_cloned = editor_cloned.lock().unwrap();
+                let mut square_handler = square_handler.lock().unwrap();
+                println!("Handle square...");
+
+                // if let Some(handle_click) = &editor.handle_button_click(editor) {
+                //     println!("Handling click...");
+                //     handle_click(editor);
+                // }
+                square_handler.handle_button_click(editor_cloned);
             }),
         )
             .style(|s| s.flex_col().gap(10).margin_top(10)),
@@ -419,33 +429,33 @@ fn handle_mouse_input(
     }))
 }
 
-fn handle_button_click(
-    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    gpu_resources: std::sync::Arc<GpuResources>,
-    window_size: WindowSize,
-) -> Option<Box<dyn Fn()>> {
-    Some(Box::new(move || {
-        println!("Button clicked, attempting to add polygon...");
-        if let Ok(mut editor) = editor.lock() {
-            println!("Editor locked successfully. Adding polygon...");
-            editor.polygons.push(Polygon::new(
-                &window_size,
-                &gpu_resources.device,
-                vec![
-                    Point { x: 0.0, y: 0.0 },
-                    Point { x: 1.0, y: 0.0 },
-                    Point { x: 0.5, y: 1.0 },
-                ],
-                (100.0, 100.0),
-                Point { x: 50.0, y: 50.0 },
-                5.0,
-            ));
-            println!("Polygon added successfully.");
-        } else {
-            println!("Failed to lock the editor.");
-        }
-    }))
-}
+// fn handle_button_click(
+//     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+//     gpu_resources: std::sync::Arc<GpuResources>,
+//     window_size: WindowSize,
+// ) -> Option<Box<dyn Fn()>> {
+//     Some(Box::new(move || {
+//         println!("Button clicked, attempting to add polygon...");
+//         if let Ok(mut editor) = editor.lock() {
+//             println!("Editor locked successfully. Adding polygon...");
+//             editor.polygons.push(Polygon::new(
+//                 &window_size,
+//                 &gpu_resources.device,
+//                 vec![
+//                     Point { x: 0.0, y: 0.0 },
+//                     Point { x: 1.0, y: 0.0 },
+//                     Point { x: 0.5, y: 1.0 },
+//                 ],
+//                 (100.0, 100.0),
+//                 Point { x: 50.0, y: 50.0 },
+//                 5.0,
+//             ));
+//             println!("Polygon added successfully.");
+//         } else {
+//             println!("Failed to lock the editor.");
+//         }
+//     }))
+// }
 
 // fn handle_button_click(
 //     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
@@ -487,19 +497,29 @@ fn main() {
     let viewport = Viewport::new(window_size.width as f32, window_size.height as f32); // Or whatever your window size is
     let mut editor = Arc::new(Mutex::new(Editor::new(viewport)));
     let mut handler = Arc::new(Mutex::new(Handler::new()));
+    let mut square_handler = Arc::new(Mutex::new(Handler::new()));
 
     let cloned_handler = Arc::clone(&handler);
-    let cloned_handler2 = Arc::clone(&handler);
+    let cloned_square_handler = Arc::clone(&square_handler);
+    let cloned_square_handler6 = Arc::clone(&square_handler);
 
     let cloned = Arc::clone(&editor);
     let cloned2 = Arc::clone(&editor);
     let cloned3 = Arc::clone(&editor);
     let cloned4 = Arc::clone(&editor);
     let cloned5 = Arc::clone(&editor);
+    let cloned6 = Arc::clone(&editor);
 
     let app = Application::new();
     let (mut app, window_id) = app.window(
-        move |_| app_view(Arc::clone(&editor), handler),
+        move |_| {
+            app_view(
+                Arc::clone(&editor),
+                cloned6,
+                handler,
+                cloned_square_handler6,
+            )
+        },
         // Some(WindowConfig {
         //     size: Some(Size::new(
         //         window_size.width as f64,
@@ -724,7 +744,37 @@ fn main() {
                 // editor.handle_button_click =
                 //     handle_button_click(editor_clone, gpu_resources.clone(), window_size);
                 let mut cloned_handler = cloned_handler.lock().unwrap();
-                cloned_handler.set_button_handler(Arc::clone(&gpu_resources), window_size);
+                cloned_handler.set_button_handler(
+                    Arc::clone(&gpu_resources),
+                    window_size,
+                    PolygonConfig {
+                        points: vec![
+                            Point { x: 0.0, y: 0.0 },
+                            Point { x: 1.0, y: 0.0 },
+                            Point { x: 0.5, y: 1.0 },
+                        ],
+                        dimensions: (100.0, 100.0),
+                        position: Point { x: 100.0, y: 100.0 },
+                        border_radius: 5.0,
+                    },
+                );
+
+                let mut cloned_square_handler = cloned_square_handler.lock().unwrap();
+                cloned_square_handler.set_button_handler(
+                    Arc::clone(&gpu_resources),
+                    window_size,
+                    PolygonConfig {
+                        points: vec![
+                            Point { x: 0.0, y: 0.0 },
+                            Point { x: 1.0, y: 0.0 },
+                            Point { x: 1.0, y: 1.0 },
+                            Point { x: 0.0, y: 1.0 },
+                        ],
+                        dimensions: (100.0, 100.0),
+                        position: Point { x: 100.0, y: 100.0 },
+                        border_radius: 5.0,
+                    },
+                );
 
                 // Create a triangle
                 editor.polygons.push(Polygon::new(
