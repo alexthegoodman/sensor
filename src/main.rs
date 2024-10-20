@@ -16,17 +16,20 @@ use floem::event::{Event, EventListener, EventPropagation};
 use floem::keyboard::{Key, NamedKey};
 use floem::kurbo::Size;
 use floem::peniko::Color;
-use floem::reactive::create_signal;
+use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
 use floem::taffy::AlignItems;
+use floem::text::Weight;
 use floem::views::editor::view;
 use floem::views::{
-    container, label, scroll, stack, tab, virtual_stack, VirtualDirection, VirtualItemSize,
+    container, dyn_container, empty, label, scroll, stack, tab, text_input, virtual_stack,
+    VirtualDirection, VirtualItemSize,
 };
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::dpi::{LogicalSize, PhysicalSize};
 use floem_winit::event::{ElementState, MouseButton};
+use uuid::Uuid;
 // use winit::{event_loop, window};
 use wgpu::util::DeviceExt;
 
@@ -159,7 +162,7 @@ fn tools_view(
                 false,
             ),
         ))
-        .style(|s| s.padding_vert(20.0))
+        .style(|s| s.padding_vert(20.0).z_index(1))
     )
 }
 
@@ -252,21 +255,6 @@ fn tab_interface(
                         .border_radius(15)
                         .apply_if(active, |s| s.border(1.0).border_color(Color::GRAY))
                 })
-                // .draggable()
-                // .style(move |s| {
-                //     s.flex_row()
-                //         .padding(5.0)
-                //         .width(100.pct())
-                //         .height(36.0)
-                //         .transition(Background, Transition::ease_in_out(400.millis()))
-                //         .items_center()
-                //         .border_bottom(1.0)
-                //         .border_color(Color::LIGHT_GRAY)
-                //         .apply_if(index == active_tab.get(), |s| {
-                //             s.background(Color::GRAY.with_alpha_factor(0.6))
-                //         })
-
-                // })
             },
         )
         .style(|s| {
@@ -301,54 +289,212 @@ fn tab_interface(
         .style(|s| s.width_full().height_full())
 }
 
+fn styled_input(label_text: String, initial_value: &str, placeholder: &str) -> impl IntoView {
+    let value = create_rw_signal(initial_value.to_string());
+
+    h_stack((
+        label(move || label_text.clone()).style(|s| s.min_width(100)),
+        text_input(value)
+            // .on_edit(move |new_value| value.set(new_value))
+            .placeholder(placeholder)
+            .style(|s| {
+                s.border(1)
+                    .border_color(Color::GRAY)
+                    .border_radius(4)
+                    .padding_horiz(5)
+                    .padding_vert(3)
+            }),
+    ))
+    .style(|s| s.items_center().margin_bottom(10))
+}
+
+fn properties_view(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    polygon_selected: RwSignal<bool>,
+    selected_polygon_id: RwSignal<Uuid>,
+    selected_polygon_data: RwSignal<PolygonConfig>,
+) -> impl IntoView {
+    // let polygon_data = selected_polygon_data.read();
+
+    v_stack((
+        h_stack((
+            small_button(
+                "",
+                "arrow-left",
+                {
+                    move |_| {
+                        println!("Click back!");
+                        // this action runs on_click_stop so should stop propagation
+                        polygon_selected.update(|v| {
+                            *v = false;
+                        });
+                        selected_polygon_id.update(|v| {
+                            *v = Uuid::nil();
+                        });
+                    }
+                },
+                false,
+            )
+            .style(|s| s.margin_right(7.0)),
+            label(|| "Properties").style(|s| s.font_size(24.0).font_weight(Weight::BOLD)),
+        ))
+        .style(|s| s.margin_bottom(12.0)),
+        styled_input(
+            "Width:".to_string(),
+            &selected_polygon_data
+                .read()
+                .borrow()
+                .dimensions
+                .0
+                .to_string(),
+            "Enter width",
+        ),
+        styled_input(
+            "Height:".to_string(),
+            &selected_polygon_data
+                .read()
+                .borrow()
+                .dimensions
+                .1
+                .to_string(),
+            "Enter height",
+        ),
+        styled_input("Red:".to_string(), "255", "0-255"),
+        styled_input("Green:".to_string(), "0", "0-255"),
+        styled_input("Blue:".to_string(), "0", "0-255"),
+        styled_input(
+            "Border Radius:".to_string(),
+            &selected_polygon_data
+                .read()
+                .borrow()
+                .border_radius
+                .to_string(),
+            "Enter radius",
+        ),
+    ))
+    .style(|s| {
+        s.width(300)
+            .padding(20)
+            .background(Color::rgba(240.0, 240.0, 240.0, 255.0))
+            .border_radius(15)
+            .box_shadow_blur(15)
+            .box_shadow_spread(4)
+            .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
+    })
+    .style(|s| {
+        s.absolute()
+            .height(800.0)
+            .margin_left(-125.0)
+            .margin_top(20)
+            .z_index(10)
+    })
+}
+
+type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
+use std::ops::Not;
+
 fn app_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned2: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned3: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned4: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     mut handler: std::sync::Arc<Mutex<Handler>>,
     mut square_handler: std::sync::Arc<Mutex<Handler>>,
 ) -> impl IntoView {
-    let (counter, mut set_counter) = create_signal(0);
-    let (selected_option, set_selected_option) = create_signal(DropdownOption::Option1);
+    // // let (counter, mut set_counter) = create_signal(0);
+    // let (polygon_selected, mut set_polygon_selected) = create_signal(false);
+    // let (selected_polygon_id, mut set_selected_polygon_id) = create_signal(Uuid::nil());
+    let polygon_selected = create_rw_signal(false);
+    let selected_polygon_id = create_rw_signal(Uuid::nil());
+    let selected_polygon_data = create_rw_signal(PolygonConfig {
+        points: Vec::new(),
+        dimensions: (100.0, 100.0),
+        position: Point { x: 0.0, y: 0.0 },
+        border_radius: 0.0,
+    });
 
-    println!("selected_option {:?}", selected_option.get());
+    // Create a RefCell to hold the set_counter function
+    // let set_counter_ref = Arc::new(Mutex::new(set_counter));
+    let polygon_selected_ref = Arc::new(Mutex::new(polygon_selected));
+    let selected_polygon_id_ref = Arc::new(Mutex::new(selected_polygon_id));
+    let selected_polygon_data_ref = Arc::new(Mutex::new(selected_polygon_data));
 
-    // let tab = scroll(tab).scroll_style(|s| s.shrink_to_fit());
+    let editor_cloned2 = editor_cloned2.clone();
 
-    v_stack((
+    // Create the handle_polygon_click function
+    let handle_polygon_click: Arc<PolygonClickHandler> = Arc::new({
+        // let set_counter_ref = Arc::clone(&set_counter_ref);
+        let polygon_selected_ref = Arc::clone(&polygon_selected_ref);
+        let selected_polygon_id_ref = Arc::clone(&selected_polygon_id_ref);
+        let selected_polygon_data_ref = Arc::clone(&selected_polygon_data_ref);
+        move || {
+            let new_editor = editor_cloned2.clone();
+            // let set_counter_ref = set_counter_ref.clone();
+            let polygon_selected_ref = polygon_selected_ref.clone();
+            let selected_polygon_id_ref = selected_polygon_id_ref.clone();
+            let selected_polygon_data_ref = selected_polygon_data_ref.clone();
+            Some(
+                Box::new(move |polygon_id: Uuid, polygon_data: PolygonConfig| {
+                    // cannot lock editor here!
+                    // {
+                    //     let mut editor = new_editor.lock().unwrap();
+                    //     // Update editor as needed
+                    // }
+
+                    if let Ok(mut polygon_selected) = polygon_selected_ref.lock() {
+                        polygon_selected.update(|c| {
+                            *c = true;
+                        });
+                    }
+                    if let Ok(mut selected_polygon_id) = selected_polygon_id_ref.lock() {
+                        selected_polygon_id.update(|c| {
+                            *c = polygon_id;
+                        });
+                    }
+                    if let Ok(mut selected_polygon_data) = selected_polygon_data_ref.lock() {
+                        selected_polygon_data.update(|c| {
+                            *c = polygon_data;
+                        });
+                    }
+                }) as Box<dyn FnMut(Uuid, PolygonConfig)>,
+            )
+        }
+    });
+
+    // create_effect(move |_| {
+    //     editor_cloned3.lock().unwrap().handle_polygon_click = Some(handle_polygon_click);
+    // });
+
+    // Use create_effect to set the handler only once
+    create_effect({
+        let handle_polygon_click = Arc::clone(&handle_polygon_click);
+        let editor_cloned3 = Arc::clone(&editor_cloned3);
+        move |_| {
+            let mut editor = editor_cloned3.lock().unwrap();
+            editor.handle_polygon_click = Some(Arc::clone(&handle_polygon_click));
+        }
+    });
+
+    container((
         // label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
         tab_interface(editor, editor_cloned, handler, square_handler),
-        // (
-        //     // nav_button("Increment", "plus", Some(move || set_counter += 1), false),
-        //     // nav_button("Decrement", "minus", Some(move || set_counter -= 1), false),
-
-        // )
-        //     .style(|s| s.flex_col().gap(10).margin_top(10)),
-        // dropdown::dropdown(
-        //     // Active item (currently selected option)
-        //     move || {
-        //         let see = selected_option.get();
-        //         println!("see {:?}", see);
-        //         see
-        //     },
-        //     // Main view (what's always visible)
-        //     |option: DropdownOption| Box::new(label(move || format!("Selected: {}", option))),
-        //     // Iterator of all options
-        //     vec![
-        //         DropdownOption::Option1,
-        //         DropdownOption::Option2,
-        //         DropdownOption::Option3,
-        //     ],
-        //     // List item view (how each option in the dropdown is displayed)
-        //     // move |option: DropdownOption| {
-        //     //     let option_clone = option.clone();
-        //     //     Box::new(button(option.to_string()).action(move || {
-        //     //         println!("DropdownOption {:?}", option_clone.clone());
-        //     //         set_selected_option.set(option_clone.clone());
-        //     //     }))
-        //     // },
-        //     move |m| text(m.to_string()).into_any(),
-        // )
-        // .on_accept(move |new| set_selected_option.set(new)),
+        dyn_container(
+            move || polygon_selected.get(),
+            move |polygon_selected_real| {
+                if polygon_selected_real {
+                    properties_view(
+                        editor_cloned4.clone(),
+                        polygon_selected,
+                        selected_polygon_id,
+                        selected_polygon_data,
+                    )
+                    .into_any()
+                } else {
+                    empty().into_any()
+                }
+            },
+        ),
     ))
     // .style(|s| s.flex_col().items_center())
 }
@@ -372,6 +518,7 @@ fn create_icon(name: &str) -> String {
         "gear" => include_str!("assets/gear-six-thin.svg"),
         "brush" => include_str!("assets/paint-brush-thin.svg"),
         "shapes" => include_str!("assets/shapes-thin.svg"),
+        "arrow-left" => include_str!("assets/arrow-left-thin.svg"),
         _ => "",
     };
 
@@ -382,6 +529,33 @@ fn create_icon(name: &str) -> String {
         .insert(name.to_string(), icon.to_string());
 
     icon.to_string()
+}
+
+fn small_button(
+    text: &'static str,
+    icon_name: &'static str,
+    action: impl FnMut(&Event) + 'static,
+    active: bool,
+) -> impl IntoView {
+    button(
+        v_stack((
+            svg(create_icon(icon_name)).style(|s| s.width(16).height(16)),
+            // label(move || text).style(|s| s.margin_top(4.0)),
+        ))
+        .style(|s| s.justify_center().align_items(AlignItems::Center)),
+    )
+    .on_click_stop(action)
+    .style(move |s| {
+        s.width(28)
+            .height(28)
+            .justify_center()
+            .align_items(AlignItems::Center)
+            .background(Color::WHITE)
+            .border_radius(15)
+            .transition(Background, Transition::ease_in_out(400.millis()))
+            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
+            .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
+    })
 }
 
 fn nav_button(
@@ -645,8 +819,8 @@ fn handle_cursor_moved(
             width: viewport.width as u32,
             height: viewport.height as u32,
         };
-        println!("window size {:?}", window_size);
-        println!("positions {:?} {:?}", positionX, positionY);
+        // println!("window size {:?}", window_size);
+        // println!("positions {:?} {:?}", positionX, positionY);
         editor.handle_mouse_move(
             &window_size,
             &gpu_resources.device,
@@ -749,12 +923,18 @@ fn main() {
     let cloned5 = Arc::clone(&editor);
     let cloned6 = Arc::clone(&editor);
     let cloned7 = Arc::clone(&editor);
+    let cloned8 = Arc::clone(&editor);
+    let cloned9 = Arc::clone(&editor);
+    let cloned10 = Arc::clone(&editor);
 
     let (mut app, window_id) = app.window(
         move |_| {
             app_view(
                 Arc::clone(&editor),
                 cloned6,
+                cloned8,
+                cloned9,
+                cloned10,
                 handler,
                 cloned_square_handler6,
             )
@@ -1029,6 +1209,7 @@ fn main() {
 
                 // editor.polygons[0].update_data_from_dimensions(&window_size, &device, (200.0, 50.0));
 
+                editor.gpu_resources = Some(Arc::clone(&gpu_resources));
                 window_handle.gpu_resources = Some(gpu_resources);
                 window_handle.gpu_helper = Some(gpu_clonsed2);
             }
