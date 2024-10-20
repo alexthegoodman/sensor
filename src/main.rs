@@ -1,5 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
+use std::fs;
+use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -16,6 +18,7 @@ use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::create_signal;
 use floem::style::{Background, CursorStyle, Transition};
+use floem::taffy::AlignItems;
 use floem::views::editor::view;
 use floem::views::{
     container, label, scroll, stack, tab, virtual_stack, VirtualDirection, VirtualItemSize,
@@ -113,8 +116,51 @@ fn assets_view() -> impl IntoView {
     (label(move || format!("Assets")).style(|s| s.margin_bottom(10)),)
 }
 
-fn tools_view() -> impl IntoView {
-    (label(move || format!("Tools")).style(|s| s.margin_bottom(10)),)
+fn tools_view(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    mut handler: std::sync::Arc<Mutex<Handler>>,
+    mut square_handler: std::sync::Arc<Mutex<Handler>>,
+) -> impl IntoView {
+    (
+        // label(move || format!("Tools")).style(|s| s.margin_bottom(10)),
+        container((
+            option_button(
+                "Add Polygon",
+                "plus",
+                Some(move || {
+                    let mut editor = editor.lock().unwrap();
+                    let mut handler = handler.lock().unwrap();
+                    println!("Handle click...");
+
+                    // if let Some(handle_click) = &editor.handle_button_click(editor) {
+                    //     println!("Handling click...");
+                    //     handle_click(editor);
+                    // }
+                    handler.handle_button_click(editor);
+                }),
+                false,
+            )
+            .style(|s| s.margin_right(5.0)),
+            option_button(
+                "Add Square",
+                "plus",
+                Some(move || {
+                    let mut editor_cloned = editor_cloned.lock().unwrap();
+                    let mut square_handler = square_handler.lock().unwrap();
+                    println!("Handle square...");
+
+                    // if let Some(handle_click) = &editor.handle_button_click(editor) {
+                    //     println!("Handling click...");
+                    //     handle_click(editor);
+                    // }
+                    square_handler.handle_button_click(editor_cloned);
+                }),
+                false,
+            ),
+        ))
+        .style(|s| s.padding_vert(20.0))
+    )
 }
 
 fn settings_view() -> impl IntoView {
@@ -124,7 +170,12 @@ fn settings_view() -> impl IntoView {
 use floem::unit::{DurationUnitExt, UnitExt};
 use std::time::Duration;
 
-fn tab_interface() -> impl View {
+fn tab_interface(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    mut handler: std::sync::Arc<Mutex<Handler>>,
+    mut square_handler: std::sync::Arc<Mutex<Handler>>,
+) -> impl View {
     let tabs: im::Vector<&str> = vec!["Tools", "Assets", "Settings"].into_iter().collect();
     let (tabs, _set_tabs) = create_signal(tabs);
     let (active_tab, set_active_tab) = create_signal(0);
@@ -132,7 +183,7 @@ fn tab_interface() -> impl View {
     let list = scroll({
         virtual_stack(
             VirtualDirection::Vertical,
-            VirtualItemSize::Fixed(Box::new(|| 36.0)),
+            VirtualItemSize::Fixed(Box::new(|| 90.0)),
             move || tabs.get(),
             move |item| *item,
             move |item| {
@@ -141,78 +192,104 @@ fn tab_interface() -> impl View {
                     .iter()
                     .position(|it| *it == item)
                     .unwrap();
-                stack((label(move || item).style(|s| s.font_size(18.0)),))
-                    .on_click_stop(move |_| {
-                        set_active_tab.update(|v: &mut usize| {
-                            *v = tabs
-                                .get_untracked()
-                                .iter()
-                                .position(|it| *it == item)
-                                .unwrap();
-                        });
-                    })
-                    .on_event(EventListener::KeyDown, move |e| {
-                        if let Event::KeyDown(key_event) = e {
-                            let active = active_tab.get();
-                            if key_event.modifiers.is_empty() {
-                                match key_event.key.logical_key {
-                                    Key::Named(NamedKey::ArrowUp) => {
-                                        if active > 0 {
-                                            set_active_tab.update(|v| *v -= 1)
-                                        }
-                                        EventPropagation::Stop
+                let active = index == active_tab.get();
+                let icon_name = match item {
+                    "Tools" => "brush",
+                    "Assets" => "shapes",
+                    "Settings" => "gear",
+                    _ => "plus",
+                };
+                stack((
+                    // label(move || item).style(|s| s.font_size(18.0)),
+                    // svg(create_icon("plus")).style(|s| s.width(24).height(24)),
+                    nav_button(
+                        item,
+                        icon_name,
+                        Some(move || {
+                            println!("Click...");
+                            set_active_tab.update(|v: &mut usize| {
+                                *v = tabs
+                                    .get_untracked()
+                                    .iter()
+                                    .position(|it| *it == item)
+                                    .unwrap();
+                            });
+                            // EventPropagation::Continue
+                        }),
+                        active,
+                    ),
+                ))
+                // .on_click()
+                .on_event(EventListener::KeyDown, move |e| {
+                    if let Event::KeyDown(key_event) = e {
+                        let active = active_tab.get();
+                        if key_event.modifiers.is_empty() {
+                            match key_event.key.logical_key {
+                                Key::Named(NamedKey::ArrowUp) => {
+                                    if active > 0 {
+                                        set_active_tab.update(|v| *v -= 1)
                                     }
-                                    Key::Named(NamedKey::ArrowDown) => {
-                                        if active < tabs.get().len() - 1 {
-                                            set_active_tab.update(|v| *v += 1)
-                                        }
-                                        EventPropagation::Stop
-                                    }
-                                    _ => EventPropagation::Continue,
+                                    EventPropagation::Stop
                                 }
-                            } else {
-                                EventPropagation::Continue
+                                Key::Named(NamedKey::ArrowDown) => {
+                                    if active < tabs.get().len() - 1 {
+                                        set_active_tab.update(|v| *v += 1)
+                                    }
+                                    EventPropagation::Stop
+                                }
+                                _ => EventPropagation::Continue,
                             }
                         } else {
                             EventPropagation::Continue
                         }
-                    })
-                    .keyboard_navigatable()
-                    .draggable()
-                    .style(move |s| {
-                        s.flex_row()
-                            .padding(5.0)
-                            .width(100.pct())
-                            .height(36.0)
-                            .transition(Background, Transition::ease_in_out(400.millis()))
-                            .items_center()
-                            .border_bottom(1.0)
-                            .border_color(Color::LIGHT_GRAY)
-                            .apply_if(index == active_tab.get(), |s| {
-                                s.background(Color::GRAY.with_alpha_factor(0.6))
-                            })
-                            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
-                            .hover(|s| {
-                                s.background(Color::LIGHT_GRAY)
-                                    .apply_if(index == active_tab.get(), |s| {
-                                        s.background(Color::GRAY)
-                                    })
-                                    .cursor(CursorStyle::Pointer)
-                            })
-                    })
+                    } else {
+                        EventPropagation::Continue
+                    }
+                })
+                .keyboard_navigatable()
+                .style(move |s| {
+                    s.margin_top(10.0)
+                        .border_radius(15)
+                        .apply_if(active, |s| s.border(1.0).border_color(Color::GRAY))
+                })
+                // .draggable()
+                // .style(move |s| {
+                //     s.flex_row()
+                //         .padding(5.0)
+                //         .width(100.pct())
+                //         .height(36.0)
+                //         .transition(Background, Transition::ease_in_out(400.millis()))
+                //         .items_center()
+                //         .border_bottom(1.0)
+                //         .border_color(Color::LIGHT_GRAY)
+                //         .apply_if(index == active_tab.get(), |s| {
+                //             s.background(Color::GRAY.with_alpha_factor(0.6))
+                //         })
+
+                // })
             },
         )
-        .style(|s| s.flex_col().width(140.0))
+        .style(|s| {
+            s.flex_col()
+                .width(110.0)
+                .padding_vert(10.0)
+                .padding_horiz(20.0)
+        })
     })
-    .scroll_style(|s| s.shrink_to_fit())
-    .style(|s| s.border(1.).border_color(Color::GRAY));
+    .scroll_style(|s| s.shrink_to_fit());
 
     let tab_content = tab(
         move || active_tab.get(),
         move || tabs.get(),
         |it| *it,
-        |it| match it {
-            "Tools" => tools_view().into_any(),
+        move |it| match it {
+            "Tools" => tools_view(
+                editor.clone(),
+                editor_cloned.clone(),
+                handler.clone(),
+                square_handler.clone(),
+            )
+            .into_any(),
             "Assets" => assets_view().into_any(),
             "Settings" => settings_view().into_any(),
             _ => label(|| "Not implemented".to_owned()).into_any(),
@@ -238,35 +315,14 @@ fn app_view(
     // let tab = scroll(tab).scroll_style(|s| s.shrink_to_fit());
 
     v_stack((
-        label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
-        tab_interface(),
-        (
-            styled_button("Increment", "plus", move || set_counter += 1),
-            styled_button("Decrement", "minus", move || set_counter -= 1),
-            styled_button("Add Polygon", "plus", move || {
-                let mut editor = editor.lock().unwrap();
-                let mut handler = handler.lock().unwrap();
-                println!("Handle click...");
+        // label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
+        tab_interface(editor, editor_cloned, handler, square_handler),
+        // (
+        //     // nav_button("Increment", "plus", Some(move || set_counter += 1), false),
+        //     // nav_button("Decrement", "minus", Some(move || set_counter -= 1), false),
 
-                // if let Some(handle_click) = &editor.handle_button_click(editor) {
-                //     println!("Handling click...");
-                //     handle_click(editor);
-                // }
-                handler.handle_button_click(editor);
-            }),
-            styled_button("Add Square", "plus", move || {
-                let mut editor_cloned = editor_cloned.lock().unwrap();
-                let mut square_handler = square_handler.lock().unwrap();
-                println!("Handle square...");
-
-                // if let Some(handle_click) = &editor.handle_button_click(editor) {
-                //     println!("Handling click...");
-                //     handle_click(editor);
-                // }
-                square_handler.handle_button_click(editor_cloned);
-            }),
-        )
-            .style(|s| s.flex_col().gap(10).margin_top(10)),
+        // )
+        //     .style(|s| s.flex_col().gap(10).margin_top(10)),
         // dropdown::dropdown(
         //     // Active item (currently selected option)
         //     move || {
@@ -297,34 +353,92 @@ fn app_view(
     // .style(|s| s.flex_col().items_center())
 }
 
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+
+static ICON_CACHE: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
 fn create_icon(name: &str) -> String {
-    match name {
-        "plus" => r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="none" d="M0 0h24v24H0z"/><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>"#.to_string(),
-        "minus" => r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="none" d="M0 0h24v24H0z"/><path d="M5 11h14v2H5z"/></svg>"#.to_string(),
-        _ => "".to_string(),
+    // Try to retrieve from cache first
+    if let Some(icon) = ICON_CACHE.lock().unwrap().get(name) {
+        return icon.clone();
     }
+
+    // If not in cache, load and cache it
+    let icon = match name {
+        "plus" => include_str!("assets/plus-thin.svg"),
+        "minus" => include_str!("assets/minus-thin.svg"),
+        "windmill" => include_str!("assets/windmill-thin.svg"),
+        "gear" => include_str!("assets/gear-six-thin.svg"),
+        "brush" => include_str!("assets/paint-brush-thin.svg"),
+        "shapes" => include_str!("assets/shapes-thin.svg"),
+        _ => "",
+    };
+
+    // Store in cache
+    ICON_CACHE
+        .lock()
+        .unwrap()
+        .insert(name.to_string(), icon.to_string());
+
+    icon.to_string()
 }
 
-fn styled_button(
+fn nav_button(
     text: &'static str,
     icon_name: &'static str,
-    action: impl FnMut() + 'static,
+    action: Option<impl FnMut() + 'static>,
+    active: bool,
 ) -> impl IntoView {
-    // button(text)
-    button(v_stack((
-        svg(create_icon(icon_name)).style(|s| s.width(24).height(24)),
-        label(move || text),
-    )))
+    button(
+        v_stack((
+            svg(create_icon(icon_name)).style(|s| s.width(30).height(30)),
+            label(move || text).style(|s| s.margin_top(4.0)),
+        ))
+        .style(|s| s.justify_center().align_items(AlignItems::Center)),
+    )
     .action(action)
-    .style(|s| {
+    .style(move |s| {
         s.width(70)
             .height(70)
+            .justify_center()
+            .align_items(AlignItems::Center)
+            .border(0)
             .border_radius(15)
             .box_shadow_blur(15)
             .box_shadow_spread(4)
-            .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.16))
-            // .transition("all 0.2s")
-            .hover(|s| s.box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.32)))
+            .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
+            .transition(Background, Transition::ease_in_out(400.millis()))
+            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
+            .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
+    })
+}
+
+fn option_button(
+    text: &'static str,
+    icon_name: &'static str,
+    action: Option<impl FnMut() + 'static>,
+    active: bool,
+) -> impl IntoView {
+    button(
+        v_stack((
+            svg(create_icon(icon_name)).style(|s| s.width(24).height(24)),
+            label(move || text).style(|s| s.margin_top(4.0).font_size(9.0)),
+        ))
+        .style(|s| s.justify_center().align_items(AlignItems::Center)),
+    )
+    .action(action)
+    .style(move |s| {
+        s.width(60)
+            .height(60)
+            .justify_center()
+            .align_items(AlignItems::Center)
+            .border(1.0)
+            .border_color(Color::GRAY)
+            .border_radius(15)
+            .transition(Background, Transition::ease_in_out(400.millis()))
+            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
+            .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
     })
 }
 
@@ -843,7 +957,7 @@ fn main() {
                             Point { x: 0.5, y: 1.0 },
                         ],
                         dimensions: (100.0, 100.0),
-                        position: Point { x: 100.0, y: 100.0 },
+                        position: Point { x: 600.0, y: 100.0 },
                         border_radius: 5.0,
                     },
                 );
@@ -860,7 +974,7 @@ fn main() {
                             Point { x: 0.0, y: 1.0 },
                         ],
                         dimensions: (100.0, 100.0),
-                        position: Point { x: 100.0, y: 100.0 },
+                        position: Point { x: 600.0, y: 100.0 },
                         border_radius: 5.0,
                     },
                 );
@@ -875,7 +989,7 @@ fn main() {
                         Point { x: 0.5, y: 1.0 },
                     ],
                     (100.0, 100.0),
-                    Point { x: 100.0, y: 100.0 },
+                    Point { x: 600.0, y: 100.0 },
                     5.0, // border radius
                 ));
 
@@ -890,7 +1004,7 @@ fn main() {
                         Point { x: 0.0, y: 1.0 },
                     ],
                     (150.0, 100.0),
-                    Point { x: 300.0, y: 200.0 },
+                    Point { x: 900.0, y: 200.0 },
                     10.0, // border radius
                 ));
 
@@ -906,7 +1020,10 @@ fn main() {
                         Point { x: 0.0, y: 0.4 },
                     ],
                     (120.0, 120.0),
-                    Point { x: 500.0, y: 300.0 },
+                    Point {
+                        x: 1100.0,
+                        y: 300.0,
+                    },
                     8.0, // border radius
                 ));
 
