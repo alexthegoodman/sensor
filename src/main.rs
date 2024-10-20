@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use bytemuck::Contiguous;
 use common_vector::basic::{rgb_to_wgpu, Point, WindowSize};
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, Editor, Viewport};
@@ -15,11 +16,13 @@ use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::create_signal;
 use floem::style::{Background, CursorStyle, Transition};
+use floem::views::editor::view;
 use floem::views::{
     container, label, scroll, stack, tab, virtual_stack, VirtualDirection, VirtualItemSize,
 };
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
+use floem_winit::dpi::{LogicalSize, PhysicalSize};
 use floem_winit::event::{ElementState, MouseButton};
 // use winit::{event_loop, window};
 use wgpu::util::DeviceExt;
@@ -35,7 +38,7 @@ use floem::{
     IntoView,
 };
 use floem::{Application, CustomRenderCallback};
-use floem::{View, WindowHandle};
+use floem::{GpuHelper, View, WindowHandle};
 
 // Define an enum for our dropdown options
 #[derive(Clone, PartialEq, Debug)]
@@ -68,11 +71,17 @@ impl Handler {
     pub fn set_button_handler(
         &mut self,
         gpu_resources: Arc<GpuResources>,
-        window_size: WindowSize,
+        // window_size: WindowSize,
+        viewport: Arc<Mutex<Viewport>>,
         polygon_config: PolygonConfig,
     ) {
         let handler = Box::new(move |mut editor: MutexGuard<'_, Editor>| {
             println!("Button clicked, attempting to add polygon...");
+            let viewport = viewport.lock().unwrap();
+            let window_size = WindowSize {
+                width: viewport.width as u32,
+                height: viewport.height as u32,
+            };
             editor.polygons.push(Polygon::new(
                 &window_size,
                 &gpu_resources.device,
@@ -329,25 +338,8 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
               view: wgpu::TextureView,
               window_handle: &WindowHandle| {
             let mut handle = window_handle.borrow();
-            // let mut handle = window_handle.borrow_mut();
-            // let mut handle = window_handle.borrow_mut();
-            // let handle = window_handle;
-
-            // if let Some(handle) = window_handle.upgrade() {
-            // let mut handle = window_handle
-            //     .try_borrow_mut()
-            //     .expect("Couldn' get window_handle");
 
             if let Some(gpu_resources) = &handle.gpu_resources {
-                // Use gpu_resources here
-                // println!("Using GPU resources in render callback");
-
-                // TODO: draw buffers here
-
-                // println!("Redraw");
-                // editor.draw(&mut renderer, &surface, &device);
-
-                // // TODO: overwriting other frame?
                 // let frame = gpu_resources
                 //     .surface
                 //     .get_current_texture()
@@ -387,6 +379,11 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         // depth_stencil_attachment: None,
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &handle
+                                .gpu_helper
+                                .as_ref()
+                                .expect("Couldn't get gpu helper")
+                                .lock()
+                                .unwrap()
                                 .depth_view
                                 .as_ref()
                                 .expect("Couldn't fetch depth view"), // This is the depth texture view
@@ -443,11 +440,18 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     //         .expect("Couldn't get window")
                     //         .inner_size()
                     //         .height,
-                    // };
-                    let window_size = &handle
-                        .window_size
-                        .as_ref()
-                        .expect("Couldn't get window size");
+                    // };'
+                    // only gets the original window size
+                    // let window_size = &handle
+                    //     .window_size
+                    //     .as_ref()
+                    //     .expect("Couldn't get window size");
+
+                    let viewport = editor.viewport.lock().unwrap();
+                    let window_size = WindowSize {
+                        width: viewport.width as u32,
+                        height: viewport.height as u32,
+                    };
 
                     // println!("Render size {:?}", window_size);
 
@@ -517,10 +521,18 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 fn handle_cursor_moved(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     gpu_resources: std::sync::Arc<GpuResources>,
-    window_size: WindowSize,
+    // window_size: WindowSize,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
 ) -> Option<Box<dyn Fn(f64, f64)>> {
     Some(Box::new(move |positionX: f64, positionY: f64| {
         let mut editor = editor.lock().unwrap();
+        let viewport = viewport.lock().unwrap();
+        let window_size = WindowSize {
+            width: viewport.width as u32,
+            height: viewport.height as u32,
+        };
+        println!("window size {:?}", window_size);
+        println!("positions {:?} {:?}", positionX, positionY);
         editor.handle_mouse_move(
             &window_size,
             &gpu_resources.device,
@@ -533,10 +545,16 @@ fn handle_cursor_moved(
 fn handle_mouse_input(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     gpu_resources: std::sync::Arc<GpuResources>,
-    window_size: WindowSize,
+    // window_size: WindowSize,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
 ) -> Option<Box<dyn Fn(MouseButton, ElementState)>> {
     Some(Box::new(move |button, state| {
         let mut editor = editor.lock().unwrap();
+        let viewport = viewport.lock().unwrap();
+        let window_size = WindowSize {
+            width: viewport.width as u32,
+            height: viewport.height as u32,
+        };
         if button == MouseButton::Left {
             match state {
                 ElementState::Pressed => editor.handle_mouse_down(
@@ -551,75 +569,60 @@ fn handle_mouse_input(
     }))
 }
 
-// fn handle_button_click(
-//     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-//     gpu_resources: std::sync::Arc<GpuResources>,
-//     window_size: WindowSize,
-// ) -> Option<Box<dyn Fn()>> {
-//     Some(Box::new(move || {
-//         println!("Button clicked, attempting to add polygon...");
-//         if let Ok(mut editor) = editor.lock() {
-//             println!("Editor locked successfully. Adding polygon...");
-//             editor.polygons.push(Polygon::new(
-//                 &window_size,
-//                 &gpu_resources.device,
-//                 vec![
-//                     Point { x: 0.0, y: 0.0 },
-//                     Point { x: 1.0, y: 0.0 },
-//                     Point { x: 0.5, y: 1.0 },
-//                 ],
-//                 (100.0, 100.0),
-//                 Point { x: 50.0, y: 50.0 },
-//                 5.0,
-//             ));
-//             println!("Polygon added successfully.");
-//         } else {
-//             println!("Failed to lock the editor.");
-//         }
-//     }))
-// }
+fn handle_window_resize(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    // window_size: WindowSize, // need newest window size
+    gpu_helper: std::sync::Arc<Mutex<GpuHelper>>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
+) -> Option<Box<dyn FnMut(PhysicalSize<u32>, LogicalSize<f64>)>> {
+    Some(Box::new(move |size, logical_size| {
+        let mut editor = editor.lock().unwrap();
 
-// fn handle_button_click(
-//     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-//     gpu_resources: &Arc<GpuResources>,
-//     window_size: &WindowSize,
-// ) {
-//     let editor = editor.clone();
+        let window_size = WindowSize {
+            width: size.width,
+            height: size.height,
+        };
 
-//     std::thread::spawn(move || {
-//         println!("Button clicked, attempting to add polygon...");
-//         match editor.lock() {
-//             Ok(mut guard) => {
-//                 println!("Editor locked successfully. Adding polygon...");
-//                 guard.polygons.push(Polygon::new(
-//                     window_size,
-//                     &gpu_resources.device,
-//                     vec![
-//                         Point { x: 0.0, y: 0.0 },
-//                         Point { x: 1.0, y: 0.0 },
-//                         Point { x: 0.5, y: 1.0 },
-//                     ],
-//                     (100.0, 100.0),
-//                     Point { x: 50.0, y: 50.0 },
-//                     5.0,
-//                 ));
-//                 println!("Polygon added successfully.");
-//             }
-//             Err(e) => println!("Failed to lock the editor: {:?}", e),
-//         }
-//     });
-// }
+        let mut viewport = viewport.lock().unwrap();
+
+        viewport.width = size.width as f32;
+        viewport.height = size.height as f32;
+
+        editor.update_date_from_window_resize(&window_size, &gpu_resources.device);
+
+        gpu_helper
+            .lock()
+            .unwrap()
+            .recreate_depth_view(&gpu_resources, &window_size);
+    }))
+}
 
 fn main() {
+    let app = Application::new();
+
+    // Get the primary monitor's size
+    let monitor = app.primary_monitor().expect("Couldn't get primary monitor");
+    let monitor_size = monitor.size();
+
+    // Calculate a reasonable window size (e.g., 80% of the screen size)
+    let window_width = (monitor_size.width.into_integer() as f32 * 0.8) as u32;
+    let window_height = (monitor_size.height.into_integer() as f32 * 0.8) as u32;
+
     let window_size = WindowSize {
-        width: 800,
-        height: 500,
+        width: window_width,
+        height: window_height,
     };
 
-    let viewport = Viewport::new(window_size.width as f32, window_size.height as f32); // Or whatever your window size is
-    let mut editor = Arc::new(Mutex::new(Editor::new(viewport)));
+    let viewport = Arc::new(Mutex::new(Viewport::new(
+        window_size.width as f32,
+        window_size.height as f32,
+    ))); // Or whatever your window size is
+    let mut editor = Arc::new(Mutex::new(Editor::new(viewport.clone())));
     let mut handler = Arc::new(Mutex::new(Handler::new()));
     let mut square_handler = Arc::new(Mutex::new(Handler::new()));
+
+    // let viewport = Arc::new(Mutex::new(viewport));
 
     let cloned_handler = Arc::clone(&handler);
     let cloned_square_handler = Arc::clone(&square_handler);
@@ -631,8 +634,8 @@ fn main() {
     let cloned4 = Arc::clone(&editor);
     let cloned5 = Arc::clone(&editor);
     let cloned6 = Arc::clone(&editor);
+    let cloned7 = Arc::clone(&editor);
 
-    let app = Application::new();
     let (mut app, window_id) = app.window(
         move |_| {
             app_view(
@@ -642,13 +645,6 @@ fn main() {
                 cloned_square_handler6,
             )
         },
-        // Some(WindowConfig {
-        //     size: Some(Size::new(
-        //         window_size.width as f64,
-        //         window_size.height as f64,
-        //     )),
-        //     ..Default::default()
-        // }),
         Some(
             WindowConfig::default()
                 .size(Size::new(
@@ -667,13 +663,6 @@ fn main() {
             .window_handles
             .get_mut(&window_id)
             .expect("Couldn't get window handle");
-        // let window_handle = window_handle.borrow_mut();
-
-        // let window_handle_rc = Rc::new(RefCell::new(window_handle));
-        // let window_handle_weak = Rc::downgrade(&window_handle_rc);
-        // let window_handle: Arc<Mutex<WindowHandle>> = Arc::new(Mutex::new(window_handle));
-
-        // let window_handle_rc = Rc::new(RefCell::new(window_handle));
 
         // Create and set the render callback
         let render_callback = create_render_callback();
@@ -684,11 +673,7 @@ fn main() {
 
         println!("Ready...");
 
-        // let mut editor = editor.lock().unwrap();
-
         window_handle.user_editor = Some(cloned);
-
-        // *window_handle.user_editor.borrow_mut() = Some(Arc::clone(&editor));
 
         // Receive and store GPU resources
         match &mut window_handle.paint_state {
@@ -696,6 +681,11 @@ fn main() {
                 let gpu_resources = Arc::new(rx.recv().unwrap().unwrap());
 
                 println!("Initializing pipeline...");
+
+                let mut gpu_helper = Arc::new(Mutex::new(GpuHelper::new()));
+
+                let gpu_cloned = Arc::clone(&gpu_helper);
+                let gpu_clonsed2 = Arc::clone(&gpu_helper);
 
                 let sampler = gpu_resources
                     .device
@@ -708,25 +698,10 @@ fn main() {
                         ..Default::default()
                     });
 
-                let depth_texture = gpu_resources
-                    .device
-                    .create_texture(&wgpu::TextureDescriptor {
-                        size: wgpu::Extent3d {
-                            width: window_size.width.clone(),
-                            height: window_size.height.clone(),
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Depth24Plus,
-                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                            | wgpu::TextureUsages::TEXTURE_BINDING,
-                        label: Some("Depth Texture"),
-                        view_formats: &[],
-                    });
-
-                let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+                gpu_cloned
+                    .lock()
+                    .unwrap()
+                    .recreate_depth_view(&gpu_resources, &window_size);
 
                 let depth_stencil_state = wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth24Plus,
@@ -835,28 +810,20 @@ fn main() {
                         });
 
                 window_handle.render_pipeline = Some(render_pipeline);
-                window_handle.depth_view = Some(depth_view);
+                // window_handle.depth_view = gpu_helper.depth_view;
 
                 println!("Initialized...");
 
-                let mut mouse_position = (0.0, 0.0);
-
-                // let device = std::sync::Arc::new(gpu_resources.device);
-
                 window_handle.handle_cursor_moved =
-                    handle_cursor_moved(cloned2.clone(), gpu_resources.clone(), window_size);
+                    handle_cursor_moved(cloned2.clone(), gpu_resources.clone(), viewport.clone());
                 window_handle.handle_mouse_input =
-                    handle_mouse_input(cloned3.clone(), gpu_resources.clone(), window_size);
-
-                // window_handle
-                //     .id
-                //     .add_event_listener(EventListener::Click, move |_| {
-                //         // Your action here
-                //         println!("Window clicked!");
-                //         // If you need to update state or trigger other actions, do it here
-                //         // For example:
-                //         // state.update(|s| s.clicked = true);
-                //     });
+                    handle_mouse_input(cloned3.clone(), gpu_resources.clone(), viewport.clone());
+                window_handle.handle_window_resized = handle_window_resize(
+                    cloned7,
+                    gpu_resources.clone(),
+                    gpu_helper,
+                    viewport.clone(),
+                );
 
                 let editor_clone = cloned4.clone();
 
@@ -868,7 +835,7 @@ fn main() {
                 let mut cloned_handler = cloned_handler.lock().unwrap();
                 cloned_handler.set_button_handler(
                     Arc::clone(&gpu_resources),
-                    window_size,
+                    viewport.clone(),
                     PolygonConfig {
                         points: vec![
                             Point { x: 0.0, y: 0.0 },
@@ -884,7 +851,7 @@ fn main() {
                 let mut cloned_square_handler = cloned_square_handler.lock().unwrap();
                 cloned_square_handler.set_button_handler(
                     Arc::clone(&gpu_resources),
-                    window_size,
+                    viewport.clone(),
                     PolygonConfig {
                         points: vec![
                             Point { x: 0.0, y: 0.0 },
@@ -946,6 +913,7 @@ fn main() {
                 // editor.polygons[0].update_data_from_dimensions(&window_size, &device, (200.0, 50.0));
 
                 window_handle.gpu_resources = Some(gpu_resources);
+                window_handle.gpu_helper = Some(gpu_clonsed2);
             }
             PaintState::Initialized { .. } => {
                 println!("Renderer is already initialized");
