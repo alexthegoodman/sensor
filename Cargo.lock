@@ -2354,6 +2354,7 @@ dependencies = [
  "floem",
  "floem-winit",
  "floem_renderer",
+ "im",
  "wgpu",
 ]
 

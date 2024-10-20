@@ -9,11 +9,15 @@ use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
-use floem::event::EventListener;
+use floem::event::{Event, EventListener, EventPropagation};
+use floem::keyboard::{Key, NamedKey};
 use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::create_signal;
-use floem::views::label;
+use floem::style::{Background, CursorStyle, Transition};
+use floem::views::{
+    container, label, scroll, stack, tab, virtual_stack, VirtualDirection, VirtualItemSize,
+};
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::event::{ElementState, MouseButton};
@@ -26,12 +30,12 @@ use floem::reactive::{SignalGet, SignalUpdate};
 use floem::views::text;
 use floem::views::Decorators;
 use floem::views::{h_stack, svg, v_stack};
-use floem::WindowHandle;
 use floem::{
     views::{button, dropdown},
     IntoView,
 };
 use floem::{Application, CustomRenderCallback};
+use floem::{View, WindowHandle};
 
 // Define an enum for our dropdown options
 #[derive(Clone, PartialEq, Debug)]
@@ -96,6 +100,121 @@ impl Handler {
     }
 }
 
+fn assets_view() -> impl IntoView {
+    (label(move || format!("Assets")).style(|s| s.margin_bottom(10)),)
+}
+
+fn tools_view() -> impl IntoView {
+    (label(move || format!("Tools")).style(|s| s.margin_bottom(10)),)
+}
+
+fn settings_view() -> impl IntoView {
+    (label(move || format!("Settings")).style(|s| s.margin_bottom(10)),)
+}
+
+use floem::unit::{DurationUnitExt, UnitExt};
+use std::time::Duration;
+
+fn tab_interface() -> impl View {
+    let tabs: im::Vector<&str> = vec!["Tools", "Assets", "Settings"].into_iter().collect();
+    let (tabs, _set_tabs) = create_signal(tabs);
+    let (active_tab, set_active_tab) = create_signal(0);
+
+    let list = scroll({
+        virtual_stack(
+            VirtualDirection::Vertical,
+            VirtualItemSize::Fixed(Box::new(|| 36.0)),
+            move || tabs.get(),
+            move |item| *item,
+            move |item| {
+                let index = tabs
+                    .get_untracked()
+                    .iter()
+                    .position(|it| *it == item)
+                    .unwrap();
+                stack((label(move || item).style(|s| s.font_size(18.0)),))
+                    .on_click_stop(move |_| {
+                        set_active_tab.update(|v: &mut usize| {
+                            *v = tabs
+                                .get_untracked()
+                                .iter()
+                                .position(|it| *it == item)
+                                .unwrap();
+                        });
+                    })
+                    .on_event(EventListener::KeyDown, move |e| {
+                        if let Event::KeyDown(key_event) = e {
+                            let active = active_tab.get();
+                            if key_event.modifiers.is_empty() {
+                                match key_event.key.logical_key {
+                                    Key::Named(NamedKey::ArrowUp) => {
+                                        if active > 0 {
+                                            set_active_tab.update(|v| *v -= 1)
+                                        }
+                                        EventPropagation::Stop
+                                    }
+                                    Key::Named(NamedKey::ArrowDown) => {
+                                        if active < tabs.get().len() - 1 {
+                                            set_active_tab.update(|v| *v += 1)
+                                        }
+                                        EventPropagation::Stop
+                                    }
+                                    _ => EventPropagation::Continue,
+                                }
+                            } else {
+                                EventPropagation::Continue
+                            }
+                        } else {
+                            EventPropagation::Continue
+                        }
+                    })
+                    .keyboard_navigatable()
+                    .draggable()
+                    .style(move |s| {
+                        s.flex_row()
+                            .padding(5.0)
+                            .width(100.pct())
+                            .height(36.0)
+                            .transition(Background, Transition::ease_in_out(400.millis()))
+                            .items_center()
+                            .border_bottom(1.0)
+                            .border_color(Color::LIGHT_GRAY)
+                            .apply_if(index == active_tab.get(), |s| {
+                                s.background(Color::GRAY.with_alpha_factor(0.6))
+                            })
+                            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
+                            .hover(|s| {
+                                s.background(Color::LIGHT_GRAY)
+                                    .apply_if(index == active_tab.get(), |s| {
+                                        s.background(Color::GRAY)
+                                    })
+                                    .cursor(CursorStyle::Pointer)
+                            })
+                    })
+            },
+        )
+        .style(|s| s.flex_col().width(140.0))
+    })
+    .scroll_style(|s| s.shrink_to_fit())
+    .style(|s| s.border(1.).border_color(Color::GRAY));
+
+    let tab_content = tab(
+        move || active_tab.get(),
+        move || tabs.get(),
+        |it| *it,
+        |it| match it {
+            "Tools" => tools_view().into_any(),
+            "Assets" => assets_view().into_any(),
+            "Settings" => settings_view().into_any(),
+            _ => label(|| "Not implemented".to_owned()).into_any(),
+        },
+    )
+    .style(|s| s.flex_col().items_start());
+
+    container(container((list, tab_content)).style(|s| s.flex_col().width_full().height_full()))
+        .style(|s| s.width_full().height_full())
+}
+
 fn app_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
@@ -107,8 +226,11 @@ fn app_view(
 
     println!("selected_option {:?}", selected_option.get());
 
-    (
+    // let tab = scroll(tab).scroll_style(|s| s.shrink_to_fit());
+
+    v_stack((
         label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
+        tab_interface(),
         (
             styled_button("Increment", "plus", move || set_counter += 1),
             styled_button("Decrement", "minus", move || set_counter -= 1),
@@ -136,34 +258,34 @@ fn app_view(
             }),
         )
             .style(|s| s.flex_col().gap(10).margin_top(10)),
-        dropdown::dropdown(
-            // Active item (currently selected option)
-            move || {
-                let see = selected_option.get();
-                println!("see {:?}", see);
-                see
-            },
-            // Main view (what's always visible)
-            |option: DropdownOption| Box::new(label(move || format!("Selected: {}", option))),
-            // Iterator of all options
-            vec![
-                DropdownOption::Option1,
-                DropdownOption::Option2,
-                DropdownOption::Option3,
-            ],
-            // List item view (how each option in the dropdown is displayed)
-            // move |option: DropdownOption| {
-            //     let option_clone = option.clone();
-            //     Box::new(button(option.to_string()).action(move || {
-            //         println!("DropdownOption {:?}", option_clone.clone());
-            //         set_selected_option.set(option_clone.clone());
-            //     }))
-            // },
-            move |m| text(m.to_string()).into_any(),
-        )
-        .on_accept(move |new| set_selected_option.set(new)),
-    )
-        .style(|s| s.flex_col().items_center())
+        // dropdown::dropdown(
+        //     // Active item (currently selected option)
+        //     move || {
+        //         let see = selected_option.get();
+        //         println!("see {:?}", see);
+        //         see
+        //     },
+        //     // Main view (what's always visible)
+        //     |option: DropdownOption| Box::new(label(move || format!("Selected: {}", option))),
+        //     // Iterator of all options
+        //     vec![
+        //         DropdownOption::Option1,
+        //         DropdownOption::Option2,
+        //         DropdownOption::Option3,
+        //     ],
+        //     // List item view (how each option in the dropdown is displayed)
+        //     // move |option: DropdownOption| {
+        //     //     let option_clone = option.clone();
+        //     //     Box::new(button(option.to_string()).action(move || {
+        //     //         println!("DropdownOption {:?}", option_clone.clone());
+        //     //         set_selected_option.set(option_clone.clone());
+        //     //     }))
+        //     // },
+        //     move |m| text(m.to_string()).into_any(),
+        // )
+        // .on_accept(move |new| set_selected_option.set(new)),
+    ))
+    // .style(|s| s.flex_col().items_center())
 }
 
 fn create_icon(name: &str) -> String {
