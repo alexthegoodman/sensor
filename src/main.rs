@@ -1,7 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_vector::basic::{rgb_to_wgpu, Point, WindowSize};
 use common_vector::dot::draw_dot;
@@ -9,6 +9,7 @@ use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::Polygon;
 use common_vector::vertex::Vertex;
+use floem::event::EventListener;
 use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::create_signal;
@@ -50,7 +51,58 @@ impl std::fmt::Display for DropdownOption {
     }
 }
 
-fn app_view() -> impl IntoView {
+struct Handler {
+    button_handler: RefCell<Option<Box<dyn Fn(MutexGuard<'_, Editor>) + Send + 'static>>>,
+}
+
+impl Handler {
+    pub fn new() -> Self {
+        Handler {
+            button_handler: RefCell::new(None),
+        }
+    }
+    pub fn set_button_handler(
+        &mut self,
+        gpu_resources: Arc<GpuResources>,
+        window_size: WindowSize,
+    ) {
+        let handler = Box::new(move |mut editor: MutexGuard<'_, Editor>| {
+            println!("Button clicked, attempting to add polygon...");
+            editor.polygons.push(Polygon::new(
+                &window_size,
+                &gpu_resources.device,
+                vec![
+                    Point { x: 0.0, y: 0.0 },
+                    Point { x: 1.0, y: 0.0 },
+                    Point { x: 0.5, y: 1.0 },
+                ],
+                (100.0, 100.0),
+                Point { x: 50.0, y: 50.0 },
+                5.0,
+            ));
+            println!("Polygon added successfully.");
+        });
+        self.button_handler.replace(Some(handler));
+    }
+
+    pub fn handle_button_click(&mut self, editor: MutexGuard<'_, Editor>) {
+        // Step 1: Check if the handler exists and clone it if it does
+        let handle = self.button_handler.borrow();
+        let handler_option = handle.as_ref();
+
+        // Step 2: If we have a handler, call it
+        if let Some(handler) = handler_option {
+            handler(editor);
+        } else {
+            println!("Button handler not set.");
+        }
+    }
+}
+
+fn app_view(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    mut handler: std::sync::Arc<Mutex<Handler>>,
+) -> impl IntoView {
     let (counter, mut set_counter) = create_signal(0);
     let (selected_option, set_selected_option) = create_signal(DropdownOption::Option1);
 
@@ -61,6 +113,17 @@ fn app_view() -> impl IntoView {
         (
             styled_button("Increment", "plus", move || set_counter += 1),
             styled_button("Decrement", "minus", move || set_counter -= 1),
+            styled_button("Add Polygon", "plus", move || {
+                let mut editor = editor.lock().unwrap();
+                let mut handler = handler.lock().unwrap();
+                println!("Handle click...");
+
+                // if let Some(handle_click) = &editor.handle_button_click(editor) {
+                //     println!("Handling click...");
+                //     handle_click(editor);
+                // }
+                handler.handle_button_click(editor);
+            }),
         )
             .style(|s| s.flex_col().gap(10).margin_top(10)),
         dropdown::dropdown(
@@ -272,13 +335,13 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 
                     // Draw guide lines
                     for guide_line in &editor.guide_lines {
-                        println!(
-                            "Rendering guideline {:?} {:?} {:?} {:?}",
-                            guide_line.start.x,
-                            guide_line.start.y,
-                            guide_line.end.x,
-                            guide_line.end.y
-                        );
+                        // println!(
+                        //     "Rendering guideline {:?} {:?} {:?} {:?}",
+                        //     guide_line.start.x,
+                        //     guide_line.start.y,
+                        //     guide_line.end.x,
+                        //     guide_line.end.y
+                        // );
                         let (vertices, indices, vertex_buffer, index_buffer) =
                             create_guide_line_buffers(
                                 &gpu_resources.device,
@@ -356,15 +419,87 @@ fn handle_mouse_input(
     }))
 }
 
+fn handle_button_click(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    window_size: WindowSize,
+) -> Option<Box<dyn Fn()>> {
+    Some(Box::new(move || {
+        println!("Button clicked, attempting to add polygon...");
+        if let Ok(mut editor) = editor.lock() {
+            println!("Editor locked successfully. Adding polygon...");
+            editor.polygons.push(Polygon::new(
+                &window_size,
+                &gpu_resources.device,
+                vec![
+                    Point { x: 0.0, y: 0.0 },
+                    Point { x: 1.0, y: 0.0 },
+                    Point { x: 0.5, y: 1.0 },
+                ],
+                (100.0, 100.0),
+                Point { x: 50.0, y: 50.0 },
+                5.0,
+            ));
+            println!("Polygon added successfully.");
+        } else {
+            println!("Failed to lock the editor.");
+        }
+    }))
+}
+
+// fn handle_button_click(
+//     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+//     gpu_resources: &Arc<GpuResources>,
+//     window_size: &WindowSize,
+// ) {
+//     let editor = editor.clone();
+
+//     std::thread::spawn(move || {
+//         println!("Button clicked, attempting to add polygon...");
+//         match editor.lock() {
+//             Ok(mut guard) => {
+//                 println!("Editor locked successfully. Adding polygon...");
+//                 guard.polygons.push(Polygon::new(
+//                     window_size,
+//                     &gpu_resources.device,
+//                     vec![
+//                         Point { x: 0.0, y: 0.0 },
+//                         Point { x: 1.0, y: 0.0 },
+//                         Point { x: 0.5, y: 1.0 },
+//                     ],
+//                     (100.0, 100.0),
+//                     Point { x: 50.0, y: 50.0 },
+//                     5.0,
+//                 ));
+//                 println!("Polygon added successfully.");
+//             }
+//             Err(e) => println!("Failed to lock the editor: {:?}", e),
+//         }
+//     });
+// }
+
 fn main() {
     let window_size = WindowSize {
         width: 800,
         height: 500,
     };
 
+    let viewport = Viewport::new(window_size.width as f32, window_size.height as f32); // Or whatever your window size is
+    let mut editor = Arc::new(Mutex::new(Editor::new(viewport)));
+    let mut handler = Arc::new(Mutex::new(Handler::new()));
+
+    let cloned_handler = Arc::clone(&handler);
+    let cloned_handler2 = Arc::clone(&handler);
+
+    let cloned = Arc::clone(&editor);
+    let cloned2 = Arc::clone(&editor);
+    let cloned3 = Arc::clone(&editor);
+    let cloned4 = Arc::clone(&editor);
+    let cloned5 = Arc::clone(&editor);
+
     let app = Application::new();
     let (mut app, window_id) = app.window(
-        move |_| app_view(),
+        move |_| app_view(Arc::clone(&editor), handler),
         // Some(WindowConfig {
         //     size: Some(Size::new(
         //         window_size.width as f64,
@@ -407,10 +542,9 @@ fn main() {
 
         println!("Ready...");
 
-        let viewport = Viewport::new(window_size.width as f32, window_size.height as f32); // Or whatever your window size is
-        let mut editor = Arc::new(Mutex::new(Editor::new(viewport)));
+        // let mut editor = editor.lock().unwrap();
 
-        window_handle.user_editor = Some(Arc::clone(&editor));
+        window_handle.user_editor = Some(cloned);
 
         // *window_handle.user_editor.borrow_mut() = Some(Arc::clone(&editor));
 
@@ -568,12 +702,29 @@ fn main() {
                 // let device = std::sync::Arc::new(gpu_resources.device);
 
                 window_handle.handle_cursor_moved =
-                    handle_cursor_moved(editor.clone(), gpu_resources.clone(), window_size);
+                    handle_cursor_moved(cloned2.clone(), gpu_resources.clone(), window_size);
                 window_handle.handle_mouse_input =
-                    handle_mouse_input(editor.clone(), gpu_resources.clone(), window_size);
+                    handle_mouse_input(cloned3.clone(), gpu_resources.clone(), window_size);
+
+                // window_handle
+                //     .id
+                //     .add_event_listener(EventListener::Click, move |_| {
+                //         // Your action here
+                //         println!("Window clicked!");
+                //         // If you need to update state or trigger other actions, do it here
+                //         // For example:
+                //         // state.update(|s| s.clicked = true);
+                //     });
+
+                let editor_clone = cloned4.clone();
 
                 // test items
-                let mut editor = editor.lock().unwrap();
+                let mut editor = cloned5.lock().unwrap();
+
+                // editor.handle_button_click =
+                //     handle_button_click(editor_clone, gpu_resources.clone(), window_size);
+                let mut cloned_handler = cloned_handler.lock().unwrap();
+                cloned_handler.set_button_handler(Arc::clone(&gpu_resources), window_size);
 
                 // Create a triangle
                 editor.polygons.push(Polygon::new(
