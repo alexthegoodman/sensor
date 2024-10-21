@@ -265,7 +265,7 @@ pub fn tools_view(
                         false,
                     ),
                 ))
-                .style(|s| s.flex_wrap(FlexWrap::Wrap)),
+                .style(|s| s.flex_wrap(FlexWrap::Wrap).margin_top(5.0)),
             )),
         ))
         .style(|s| {

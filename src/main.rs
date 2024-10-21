@@ -631,6 +631,7 @@ fn main() {
                 editor.gpu_resources = Some(Arc::clone(&gpu_resources));
                 window_handle.gpu_resources = Some(gpu_resources);
                 window_handle.gpu_helper = Some(gpu_clonsed2);
+                editor.window = window_handle.window.clone();
             }
             PaintState::Initialized { .. } => {
                 println!("Renderer is already initialized");
