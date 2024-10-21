@@ -13,7 +13,7 @@ use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
 use floem::event::{Event, EventListener, EventPropagation};
-use floem::keyboard::{Key, NamedKey};
+use floem::keyboard::{Key, KeyCode, NamedKey};
 use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
@@ -115,6 +115,34 @@ impl Handler {
     }
 }
 
+fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
+    let trimmed = s.trim();
+
+    if trimmed.is_empty() {
+        return Ok(0.0);
+    }
+
+    // Check if there's at least one digit in the string
+    if !trimmed.chars().any(|c| c.is_ascii_digit()) {
+        return Ok(0.0);
+    }
+
+    // At this point, we know there's at least one digit, so let's try to parse
+    match trimmed.parse::<f32>() {
+        Ok(num) => Ok(num),
+        Err(e) => {
+            // If parsing failed, check if it's because of a misplaced dash
+            if trimmed.contains('-') && trimmed != "-" {
+                // Remove all dashes and try parsing again
+                let without_dashes = trimmed.replace('-', "");
+                without_dashes.parse::<f32>().map(|num| -num.abs())
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
 fn assets_view() -> impl IntoView {
     (label(move || format!("Assets")).style(|s| s.margin_bottom(10)),)
 }
@@ -162,7 +190,7 @@ fn tools_view(
                 false,
             ),
         ))
-        .style(|s| s.padding_vert(20.0).z_index(1))
+        .style(|s| s.padding_vert(15.0).z_index(1))
     )
 }
 
@@ -252,7 +280,7 @@ fn tab_interface(
                 })
                 .keyboard_navigatable()
                 .style(move |s| {
-                    s.margin_top(10.0)
+                    s.margin_bottom(15.0)
                         .border_radius(15)
                         .apply_if(active, |s| s.border(1.0).border_color(Color::GRAY))
                 })
@@ -260,8 +288,9 @@ fn tab_interface(
         )
         .style(|s| {
             s.flex_col()
+                .height_full()
                 .width(110.0)
-                .padding_vert(10.0)
+                .padding_vert(15.0)
                 .padding_horiz(20.0)
         })
     })
@@ -327,13 +356,36 @@ fn tab_interface(
     .style(|s| s.width_full().height_full())
 }
 
-fn styled_input(label_text: String, initial_value: &str, placeholder: &str) -> impl IntoView {
+fn styled_input(
+    label_text: String,
+    initial_value: &str,
+    placeholder: &str,
+    on_event_stop: Box<dyn Fn(String) + 'static>,
+) -> impl IntoView {
     let value = create_rw_signal(initial_value.to_string());
 
     h_stack((
         label(move || label_text.clone()).style(|s| s.min_width(100)),
         text_input(value)
-            // .on_edit(move |new_value| value.set(new_value))
+            .on_event_stop(EventListener::KeyUp, move |event: &Event| {
+                if let Event::KeyUp(key) = event {
+                    match key.key.logical_key {
+                        Key::Named(NamedKey::ArrowUp) => {
+                            // Handle up arrow key
+                            println!("Up arrow pressed");
+                        }
+                        Key::Named(NamedKey::ArrowDown) => {
+                            // Handle down arrow key
+                            println!("Down arrow pressed");
+                        }
+                        _ => {
+                            println!("value {:?}", value.get());
+                            let value = value.get();
+                            on_event_stop(value);
+                        }
+                    }
+                }
+            })
             .placeholder(placeholder)
             .style(|s| {
                 s.border(1)
@@ -347,12 +399,24 @@ fn styled_input(label_text: String, initial_value: &str, placeholder: &str) -> i
 }
 
 fn properties_view(
+    gpu_helper: Arc<Mutex<GpuHelper>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     polygon_selected: RwSignal<bool>,
     selected_polygon_id: RwSignal<Uuid>,
     selected_polygon_data: RwSignal<PolygonConfig>,
 ) -> impl IntoView {
     // let polygon_data = selected_polygon_data.read();
+
+    let editor_cloned = Arc::clone(&editor);
+    let editor_cloned2 = Arc::clone(&editor);
+    let editor_cloned3 = Arc::clone(&editor);
+    let editor_cloned4 = Arc::clone(&editor);
+    let editor_cloned5 = Arc::clone(&editor);
+    let editor_cloned6 = Arc::clone(&editor);
+    let editor_cloned7 = Arc::clone(&editor);
+
+    let cloned_helper = Arc::clone(&gpu_helper);
+    let cloned_helper2 = Arc::clone(&gpu_helper);
 
     v_stack((
         h_stack((
@@ -374,7 +438,7 @@ fn properties_view(
                 false,
             )
             .style(|s| s.margin_right(7.0)),
-            label(|| "Properties").style(|s| s.font_size(24.0).font_weight(Weight::BOLD)),
+            label(|| "Properties").style(|s| s.font_size(24.0).font_weight(Weight::THIN)),
         ))
         .style(|s| s.margin_bottom(12.0)),
         styled_input(
@@ -386,6 +450,47 @@ fn properties_view(
                 .0
                 .to_string(),
             "Enter width",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let width = string_to_f32(&value).expect("Couldn't convert string");
+
+                    let mut editor = editor_cloned7.lock().unwrap();
+                    let mut gpu_helper = cloned_helper.lock().unwrap();
+
+                    // First iteration: find the index of the selected polygon
+                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+
+                    if let Some(index) = polygon_index {
+                        println!("Found selected polygon with ID: {}", selected_id);
+
+                        // Get the necessary data from editor
+                        let viewport_width = editor.viewport.lock().unwrap().width;
+                        let viewport_height = editor.viewport.lock().unwrap().height;
+                        let device = &gpu_helper
+                            .gpu_resources
+                            .as_ref()
+                            .expect("Couldn't get gpu resources")
+                            .device;
+
+                        let window_size = WindowSize {
+                            width: viewport_width as u32,
+                            height: viewport_height as u32,
+                        };
+
+                        // Second iteration: update the selected polygon
+                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                            selected_polygon.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                (width, selected_polygon.dimensions.1),
+                            );
+                        }
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
         ),
         styled_input(
             "Height:".to_string(),
@@ -396,10 +501,111 @@ fn properties_view(
                 .1
                 .to_string(),
             "Enter height",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let height = string_to_f32(&value).expect("Couldn't convert string");
+
+                    let mut editor = editor_cloned6.lock().unwrap();
+                    let mut gpu_helper = gpu_helper.lock().unwrap();
+
+                    // First iteration: find the index of the selected polygon
+                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+
+                    if let Some(index) = polygon_index {
+                        println!("Found selected polygon with ID: {}", selected_id);
+
+                        // Get the necessary data from editor
+                        let viewport_width = editor.viewport.lock().unwrap().width;
+                        let viewport_height = editor.viewport.lock().unwrap().height;
+                        let device = &gpu_helper
+                            .gpu_resources
+                            .as_ref()
+                            .expect("Couldn't get gpu resources")
+                            .device;
+
+                        let window_size = WindowSize {
+                            width: viewport_width as u32,
+                            height: viewport_height as u32,
+                        };
+
+                        // Second iteration: update the selected polygon
+                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                            selected_polygon.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                (selected_polygon.dimensions.0, height),
+                            );
+                        }
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
         ),
-        styled_input("Red:".to_string(), "255", "0-255"),
-        styled_input("Green:".to_string(), "0", "0-255"),
-        styled_input("Blue:".to_string(), "0", "0-255"),
+        styled_input(
+            "Red:".to_string(),
+            "255",
+            "0-255",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let editor = editor_cloned2.lock().unwrap();
+
+                    if let Some(selected_polygon) =
+                        editor.polygons.iter().find(|p| p.id == selected_id)
+                    {
+                        // Now you have the selected polygon
+                        println!("Found selected polygon with ID: {}", selected_id);
+                        // You can now work with the selected_polygon
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
+        ),
+        styled_input(
+            "Green:".to_string(),
+            "0",
+            "0-255",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let editor = editor_cloned3.lock().unwrap();
+
+                    if let Some(selected_polygon) =
+                        editor.polygons.iter().find(|p| p.id == selected_id)
+                    {
+                        // Now you have the selected polygon
+                        println!("Found selected polygon with ID: {}", selected_id);
+                        // You can now work with the selected_polygon
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
+        ),
+        styled_input(
+            "Blue:".to_string(),
+            "0",
+            "0-255",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let editor = editor_cloned4.lock().unwrap();
+
+                    if let Some(selected_polygon) =
+                        editor.polygons.iter().find(|p| p.id == selected_id)
+                    {
+                        // Now you have the selected polygon
+                        println!("Found selected polygon with ID: {}", selected_id);
+                        // You can now work with the selected_polygon
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
+        ),
         styled_input(
             "Border Radius:".to_string(),
             &selected_polygon_data
@@ -408,6 +614,47 @@ fn properties_view(
                 .border_radius
                 .to_string(),
             "Enter radius",
+            Box::new({
+                move |value| {
+                    let selected_id = selected_polygon_id.get();
+                    let border_radius = string_to_f32(&value).expect("Couldn't convert string");
+
+                    let mut editor = editor_cloned5.lock().unwrap();
+                    let mut gpu_helper = cloned_helper2.lock().unwrap();
+
+                    // First iteration: find the index of the selected polygon
+                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+
+                    if let Some(index) = polygon_index {
+                        println!("Found selected polygon with ID: {}", selected_id);
+
+                        // Get the necessary data from editor
+                        let viewport_width = editor.viewport.lock().unwrap().width;
+                        let viewport_height = editor.viewport.lock().unwrap().height;
+                        let device = &gpu_helper
+                            .gpu_resources
+                            .as_ref()
+                            .expect("Couldn't get gpu resources")
+                            .device;
+
+                        let window_size = WindowSize {
+                            width: viewport_width as u32,
+                            height: viewport_height as u32,
+                        };
+
+                        // Second iteration: update the selected polygon
+                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                            selected_polygon.update_data_from_border_radius(
+                                &window_size,
+                                &device,
+                                border_radius,
+                            );
+                        }
+                    } else {
+                        println!("No polygon found with the selected ID: {}", selected_id);
+                    }
+                }
+            }),
         ),
     ))
     .style(|s| {
@@ -434,6 +681,7 @@ use std::ops::Not;
 
 fn app_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_helper: Arc<Mutex<GpuHelper>>,
     editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     editor_cloned2: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     editor_cloned3: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
@@ -529,6 +777,7 @@ fn app_view(
             move |polygon_selected_real| {
                 if polygon_selected_real {
                     properties_view(
+                        gpu_helper.clone(),
                         editor_cloned4.clone(),
                         polygon_selected,
                         selected_polygon_id,
@@ -680,19 +929,6 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
             let mut handle = window_handle.borrow();
 
             if let Some(gpu_resources) = &handle.gpu_resources {
-                // let frame = gpu_resources
-                //     .surface
-                //     .get_current_texture()
-                //     .expect("Failed to acquire next swap chain texture");
-                // let view = frame
-                //     .texture
-                //     .create_view(&wgpu::TextureViewDescriptor::default());
-
-                // // Update the render pass to use the new vertex and index buffers
-                // let mut encoder = gpu_resources
-                //     .device
-                //     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
                 {
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
@@ -767,26 +1003,6 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         render_pass.draw_indexed(0..polygon.indices.len() as u32, 0, 0..1);
                     }
 
-                    // let window_size = WindowSize {
-                    //     width: handle
-                    //         .window
-                    //         .as_ref()
-                    //         .expect("Couldn't get window")
-                    //         .inner_size()
-                    //         .width,
-                    //     height: handle
-                    //         .window
-                    //         .as_ref()
-                    //         .expect("Couldn't get window")
-                    //         .inner_size()
-                    //         .height,
-                    // };'
-                    // only gets the original window size
-                    // let window_size = &handle
-                    //     .window_size
-                    //     .as_ref()
-                    //     .expect("Couldn't get window size");
-
                     let viewport = editor.viewport.lock().unwrap();
                     let window_size = WindowSize {
                         width: viewport.width as u32,
@@ -811,13 +1027,6 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 
                     // Draw guide lines
                     for guide_line in &editor.guide_lines {
-                        // println!(
-                        //     "Rendering guideline {:?} {:?} {:?} {:?}",
-                        //     guide_line.start.x,
-                        //     guide_line.start.y,
-                        //     guide_line.end.x,
-                        //     guide_line.end.y
-                        // );
                         let (vertices, indices, vertex_buffer, index_buffer) =
                             create_guide_line_buffers(
                                 &gpu_resources.device,
@@ -834,21 +1043,10 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     }
                 }
 
-                // gpu_resources.queue.submit(Some(encoder.finish()));
-                // frame.present();
-
                 let command_buffer = encoder.finish();
                 gpu_resources.queue.submit(Some(command_buffer));
-                gpu_resources.device.poll(wgpu::Maintain::Wait);
+                gpu_resources.device.poll(wgpu::Maintain::Poll);
                 frame.present();
-
-                // supposed to fall in line with OS refresh rate (?)
-                // std::thread::sleep(std::time::Duration::from_millis(2000));
-                // window_handle
-                //     .get_mut()
-                //     .window
-                //     .expect("Couldn't get the window")
-                //     .request_redraw();
             } else {
                 println!("GPU resources not available yet");
             }
@@ -953,6 +1151,12 @@ fn main() {
         height: window_height,
     };
 
+    let mut gpu_helper = Arc::new(Mutex::new(GpuHelper::new()));
+
+    let gpu_cloned = Arc::clone(&gpu_helper);
+    let gpu_clonsed2 = Arc::clone(&gpu_helper);
+    let gpu_cloned3 = Arc::clone(&gpu_helper);
+
     let viewport = Arc::new(Mutex::new(Viewport::new(
         window_size.width as f32,
         window_size.height as f32,
@@ -982,6 +1186,7 @@ fn main() {
         move |_| {
             app_view(
                 Arc::clone(&editor),
+                Arc::clone(&gpu_helper),
                 cloned6,
                 cloned8,
                 cloned9,
@@ -1026,11 +1231,6 @@ fn main() {
                 let gpu_resources = Arc::new(rx.recv().unwrap().unwrap());
 
                 println!("Initializing pipeline...");
-
-                let mut gpu_helper = Arc::new(Mutex::new(GpuHelper::new()));
-
-                let gpu_cloned = Arc::clone(&gpu_helper);
-                let gpu_clonsed2 = Arc::clone(&gpu_helper);
 
                 let sampler = gpu_resources
                     .device
@@ -1166,7 +1366,7 @@ fn main() {
                 window_handle.handle_window_resized = handle_window_resize(
                     cloned7,
                     gpu_resources.clone(),
-                    gpu_helper,
+                    gpu_cloned3,
                     viewport.clone(),
                 );
 
@@ -1260,6 +1460,7 @@ fn main() {
 
                 // editor.polygons[0].update_data_from_dimensions(&window_size, &device, (200.0, 50.0));
 
+                gpu_clonsed2.lock().unwrap().gpu_resources = Some(Arc::clone(&gpu_resources));
                 editor.gpu_resources = Some(Arc::clone(&gpu_resources));
                 window_handle.gpu_resources = Some(gpu_resources);
                 window_handle.gpu_helper = Some(gpu_clonsed2);
