@@ -20,7 +20,10 @@ use floem::kurbo::Size;
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
-use floem::taffy::AlignItems;
+use floem::taffy::{
+    AlignItems, Display, GridTrackRepetition, LengthPercentage, MaxTrackSizingFunction, MinMax,
+    MinTrackSizingFunction, TrackSizingFunction,
+};
 use floem::text::Weight;
 use floem::views::editor::view;
 use floem::views::{
@@ -49,6 +52,7 @@ use floem::{
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
+use super::aside;
 use super::buttons::small_button;
 use super::inputs::styled_input;
 
@@ -76,6 +80,11 @@ pub fn properties_view(
     let cloned_helper4 = Arc::clone(&gpu_helper);
     let cloned_helper5 = Arc::clone(&gpu_helper);
 
+    let aside_width = 260.0;
+    let quarters = (aside_width / 4.0) + (5.0 * 4.0);
+    let thirds = (aside_width / 3.0) + (5.0 * 3.0);
+    let halfs = (aside_width / 2.0) + (5.0 * 2.0);
+
     v_stack((
         h_stack((
             small_button(
@@ -99,266 +108,303 @@ pub fn properties_view(
             label(|| "Properties").style(|s| s.font_size(24.0).font_weight(Weight::THIN)),
         ))
         .style(|s| s.margin_bottom(12.0)),
-        styled_input(
-            "Width:".to_string(),
-            &selected_polygon_data
-                .read()
-                .borrow()
-                .dimensions
-                .0
-                .to_string(),
-            "Enter width",
-            Box::new({
-                move |value| {
-                    let selected_id = selected_polygon_id.get();
-                    let width = string_to_f32(&value).expect("Couldn't convert string");
+        h_stack((
+            styled_input(
+                "Width:".to_string(),
+                &selected_polygon_data
+                    .read()
+                    .borrow()
+                    .dimensions
+                    .0
+                    .to_string(),
+                "Enter width",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let width = string_to_f32(&value).expect("Couldn't convert string");
 
-                    let mut editor = editor_cloned7.lock().unwrap();
-                    let mut gpu_helper = cloned_helper.lock().unwrap();
+                        let mut editor = editor_cloned7.lock().unwrap();
+                        let mut gpu_helper = cloned_helper.lock().unwrap();
 
-                    // First iteration: find the index of the selected polygon
-                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+                        // First iteration: find the index of the selected polygon
+                        let polygon_index =
+                            editor.polygons.iter().position(|p| p.id == selected_id);
 
-                    if let Some(index) = polygon_index {
-                        println!("Found selected polygon with ID: {}", selected_id);
+                        if let Some(index) = polygon_index {
+                            println!("Found selected polygon with ID: {}", selected_id);
 
-                        // Get the necessary data from editor
-                        let viewport_width = editor.viewport.lock().unwrap().width;
-                        let viewport_height = editor.viewport.lock().unwrap().height;
-                        let device = &gpu_helper
-                            .gpu_resources
-                            .as_ref()
-                            .expect("Couldn't get gpu resources")
-                            .device;
+                            // Get the necessary data from editor
+                            let viewport_width = editor.viewport.lock().unwrap().width;
+                            let viewport_height = editor.viewport.lock().unwrap().height;
+                            let device = &gpu_helper
+                                .gpu_resources
+                                .as_ref()
+                                .expect("Couldn't get gpu resources")
+                                .device;
 
-                        let window_size = WindowSize {
-                            width: viewport_width as u32,
-                            height: viewport_height as u32,
-                        };
+                            let window_size = WindowSize {
+                                width: viewport_width as u32,
+                                height: viewport_height as u32,
+                            };
 
-                        // Second iteration: update the selected polygon
-                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
-                            selected_polygon.update_data_from_dimensions(
-                                &window_size,
-                                &device,
-                                (width, selected_polygon.dimensions.1),
-                            );
+                            // Second iteration: update the selected polygon
+                            if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                                selected_polygon.update_data_from_dimensions(
+                                    &window_size,
+                                    &device,
+                                    (width, selected_polygon.dimensions.1),
+                                );
+                            }
+                        } else {
+                            println!("No polygon found with the selected ID: {}", selected_id);
                         }
-                    } else {
-                        println!("No polygon found with the selected ID: {}", selected_id);
                     }
-                }
-            }),
-        ),
-        styled_input(
-            "Height:".to_string(),
-            &selected_polygon_data
-                .read()
-                .borrow()
-                .dimensions
-                .1
-                .to_string(),
-            "Enter height",
-            Box::new({
-                move |value| {
-                    let selected_id = selected_polygon_id.get();
-                    let height = string_to_f32(&value).expect("Couldn't convert string");
+                }),
+            )
+            .style(move |s| s.width(halfs).margin_right(5.0)),
+            styled_input(
+                "Height:".to_string(),
+                &selected_polygon_data
+                    .read()
+                    .borrow()
+                    .dimensions
+                    .1
+                    .to_string(),
+                "Enter height",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let height = string_to_f32(&value).expect("Couldn't convert string");
 
-                    let mut editor = editor_cloned6.lock().unwrap();
-                    let mut gpu_helper = gpu_helper.lock().unwrap();
+                        let mut editor = editor_cloned6.lock().unwrap();
+                        let mut gpu_helper = gpu_helper.lock().unwrap();
 
-                    // First iteration: find the index of the selected polygon
-                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+                        // First iteration: find the index of the selected polygon
+                        let polygon_index =
+                            editor.polygons.iter().position(|p| p.id == selected_id);
 
-                    if let Some(index) = polygon_index {
-                        println!("Found selected polygon with ID: {}", selected_id);
+                        if let Some(index) = polygon_index {
+                            println!("Found selected polygon with ID: {}", selected_id);
 
-                        // Get the necessary data from editor
-                        let viewport_width = editor.viewport.lock().unwrap().width;
-                        let viewport_height = editor.viewport.lock().unwrap().height;
-                        let device = &gpu_helper
-                            .gpu_resources
-                            .as_ref()
-                            .expect("Couldn't get gpu resources")
-                            .device;
+                            // Get the necessary data from editor
+                            let viewport_width = editor.viewport.lock().unwrap().width;
+                            let viewport_height = editor.viewport.lock().unwrap().height;
+                            let device = &gpu_helper
+                                .gpu_resources
+                                .as_ref()
+                                .expect("Couldn't get gpu resources")
+                                .device;
 
-                        let window_size = WindowSize {
-                            width: viewport_width as u32,
-                            height: viewport_height as u32,
-                        };
+                            let window_size = WindowSize {
+                                width: viewport_width as u32,
+                                height: viewport_height as u32,
+                            };
 
-                        // Second iteration: update the selected polygon
-                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
-                            selected_polygon.update_data_from_dimensions(
-                                &window_size,
-                                &device,
-                                (selected_polygon.dimensions.0, height),
-                            );
+                            // Second iteration: update the selected polygon
+                            if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                                selected_polygon.update_data_from_dimensions(
+                                    &window_size,
+                                    &device,
+                                    (selected_polygon.dimensions.0, height),
+                                );
+                            }
+                        } else {
+                            println!("No polygon found with the selected ID: {}", selected_id);
                         }
-                    } else {
-                        println!("No polygon found with the selected ID: {}", selected_id);
                     }
-                }
-            }),
-        ),
-        styled_input(
-            "Red:".to_string(),
-            &wgpu_to_hex(selected_polygon_data.read().borrow().fill[0]).to_string(),
-            "0-255",
-            Box::new({
-                move |value| {
-                    let selected_id = selected_polygon_id.get();
-                    let mut editor = editor_cloned2.lock().unwrap();
-                    let mut gpu_helper = cloned_helper3.lock().unwrap();
+                }),
+            )
+            .style(move |s| s.width(halfs)),
+        ))
+        .style(move |s| {
+            s.width(aside_width)
+            // .display(Display::Grid)
+            // .grid_template_columns(vec![TrackSizingFunction::Repeat(
+            //     floem::taffy::GridTrackRepetition::Count(2),
+            //     vec![MinMax::from(MinMax {
+            //         min: MinTrackSizingFunction::Fixed(LengthPercentage::Percent(100.0 / 2.0)),
+            //         max: MaxTrackSizingFunction::Fixed(LengthPercentage::Percent(100.0 / 2.0)),
+            //     })],
+            // )])
+        }),
+        h_stack((
+            styled_input(
+                "Red:".to_string(),
+                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[0]).to_string(),
+                "0-255",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned2.lock().unwrap();
+                        let mut gpu_helper = cloned_helper3.lock().unwrap();
 
-                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+                        let polygon_index =
+                            editor.polygons.iter().position(|p| p.id == selected_id);
 
-                    if let Some(index) = polygon_index {
-                        // Now you have the selected polygon
-                        println!("Found selected polygon with ID: {}", selected_id);
-                        // You can now work with the selected_polygon
+                        if let Some(index) = polygon_index {
+                            // Now you have the selected polygon
+                            println!("Found selected polygon with ID: {}", selected_id);
+                            // You can now work with the selected_polygon
 
-                        // Get the necessary data from editor
-                        let viewport_width = editor.viewport.lock().unwrap().width;
-                        let viewport_height = editor.viewport.lock().unwrap().height;
-                        let device = &gpu_helper
-                            .gpu_resources
-                            .as_ref()
-                            .expect("Couldn't get gpu resources")
-                            .device;
+                            // Get the necessary data from editor
+                            let viewport_width = editor.viewport.lock().unwrap().width;
+                            let viewport_height = editor.viewport.lock().unwrap().height;
+                            let device = &gpu_helper
+                                .gpu_resources
+                                .as_ref()
+                                .expect("Couldn't get gpu resources")
+                                .device;
 
-                        let window_size = WindowSize {
-                            width: viewport_width as u32,
-                            height: viewport_height as u32,
-                        };
+                            let window_size = WindowSize {
+                                width: viewport_width as u32,
+                                height: viewport_height as u32,
+                            };
 
-                        // Second iteration: update the selected polygon
-                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
-                            selected_polygon.update_data_from_fill(
-                                &window_size,
-                                &device,
-                                [
-                                    color_to_wgpu(
-                                        string_to_f32(&value).expect("Couldn't convert string"),
-                                    ),
-                                    selected_polygon.fill[1],
-                                    selected_polygon.fill[2],
-                                    selected_polygon.fill[3],
-                                ],
-                            );
+                            // Second iteration: update the selected polygon
+                            if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                                selected_polygon.update_data_from_fill(
+                                    &window_size,
+                                    &device,
+                                    [
+                                        color_to_wgpu(
+                                            string_to_f32(&value).expect("Couldn't convert string"),
+                                        ),
+                                        selected_polygon.fill[1],
+                                        selected_polygon.fill[2],
+                                        selected_polygon.fill[3],
+                                    ],
+                                );
+                            }
+                        } else {
+                            println!("No polygon found with the selected ID: {}", selected_id);
                         }
-                    } else {
-                        println!("No polygon found with the selected ID: {}", selected_id);
                     }
-                }
-            }),
-        ),
-        styled_input(
-            "Green:".to_string(),
-            &wgpu_to_hex(selected_polygon_data.read().borrow().fill[1]).to_string(),
-            "0-255",
-            Box::new({
-                move |value| {
-                    let selected_id = selected_polygon_id.get();
-                    let mut editor = editor_cloned3.lock().unwrap();
+                }),
+            )
+            .style(move |s| s.width(thirds).margin_right(5.0)),
+            styled_input(
+                "Green:".to_string(),
+                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[1]).to_string(),
+                "0-255",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned3.lock().unwrap();
 
-                    let mut gpu_helper = cloned_helper4.lock().unwrap();
+                        let mut gpu_helper = cloned_helper4.lock().unwrap();
 
-                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+                        let polygon_index =
+                            editor.polygons.iter().position(|p| p.id == selected_id);
 
-                    if let Some(index) = polygon_index {
-                        // Now you have the selected polygon
-                        println!("Found selected polygon with ID: {}", selected_id);
-                        // You can now work with the selected_polygon
+                        if let Some(index) = polygon_index {
+                            // Now you have the selected polygon
+                            println!("Found selected polygon with ID: {}", selected_id);
+                            // You can now work with the selected_polygon
 
-                        // Get the necessary data from editor
-                        let viewport_width = editor.viewport.lock().unwrap().width;
-                        let viewport_height = editor.viewport.lock().unwrap().height;
-                        let device = &gpu_helper
-                            .gpu_resources
-                            .as_ref()
-                            .expect("Couldn't get gpu resources")
-                            .device;
+                            // Get the necessary data from editor
+                            let viewport_width = editor.viewport.lock().unwrap().width;
+                            let viewport_height = editor.viewport.lock().unwrap().height;
+                            let device = &gpu_helper
+                                .gpu_resources
+                                .as_ref()
+                                .expect("Couldn't get gpu resources")
+                                .device;
 
-                        let window_size = WindowSize {
-                            width: viewport_width as u32,
-                            height: viewport_height as u32,
-                        };
+                            let window_size = WindowSize {
+                                width: viewport_width as u32,
+                                height: viewport_height as u32,
+                            };
 
-                        // Second iteration: update the selected polygon
-                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
-                            selected_polygon.update_data_from_fill(
-                                &window_size,
-                                &device,
-                                [
-                                    selected_polygon.fill[0],
-                                    color_to_wgpu(
-                                        string_to_f32(&value).expect("Couldn't convert string"),
-                                    ),
-                                    selected_polygon.fill[2],
-                                    selected_polygon.fill[3],
-                                ],
-                            );
+                            // Second iteration: update the selected polygon
+                            if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                                selected_polygon.update_data_from_fill(
+                                    &window_size,
+                                    &device,
+                                    [
+                                        selected_polygon.fill[0],
+                                        color_to_wgpu(
+                                            string_to_f32(&value).expect("Couldn't convert string"),
+                                        ),
+                                        selected_polygon.fill[2],
+                                        selected_polygon.fill[3],
+                                    ],
+                                );
+                            }
+                        } else {
+                            println!("No polygon found with the selected ID: {}", selected_id);
                         }
-                    } else {
-                        println!("No polygon found with the selected ID: {}", selected_id);
                     }
-                }
-            }),
-        ),
-        styled_input(
-            "Blue:".to_string(),
-            &wgpu_to_hex(selected_polygon_data.read().borrow().fill[2]).to_string(),
-            "0-255",
-            Box::new({
-                move |value| {
-                    let selected_id = selected_polygon_id.get();
-                    let mut editor = editor_cloned4.lock().unwrap();
+                }),
+            )
+            .style(move |s| s.width(thirds).margin_right(5.0)),
+            styled_input(
+                "Blue:".to_string(),
+                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[2]).to_string(),
+                "0-255",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned4.lock().unwrap();
 
-                    let mut gpu_helper = cloned_helper5.lock().unwrap();
+                        let mut gpu_helper = cloned_helper5.lock().unwrap();
 
-                    let polygon_index = editor.polygons.iter().position(|p| p.id == selected_id);
+                        let polygon_index =
+                            editor.polygons.iter().position(|p| p.id == selected_id);
 
-                    if let Some(index) = polygon_index {
-                        // Now you have the selected polygon
-                        println!("Found selected polygon with ID: {}", selected_id);
-                        // You can now work with the selected_polygon
+                        if let Some(index) = polygon_index {
+                            // Now you have the selected polygon
+                            println!("Found selected polygon with ID: {}", selected_id);
+                            // You can now work with the selected_polygon
 
-                        // Get the necessary data from editor
-                        let viewport_width = editor.viewport.lock().unwrap().width;
-                        let viewport_height = editor.viewport.lock().unwrap().height;
-                        let device = &gpu_helper
-                            .gpu_resources
-                            .as_ref()
-                            .expect("Couldn't get gpu resources")
-                            .device;
+                            // Get the necessary data from editor
+                            let viewport_width = editor.viewport.lock().unwrap().width;
+                            let viewport_height = editor.viewport.lock().unwrap().height;
+                            let device = &gpu_helper
+                                .gpu_resources
+                                .as_ref()
+                                .expect("Couldn't get gpu resources")
+                                .device;
 
-                        let window_size = WindowSize {
-                            width: viewport_width as u32,
-                            height: viewport_height as u32,
-                        };
+                            let window_size = WindowSize {
+                                width: viewport_width as u32,
+                                height: viewport_height as u32,
+                            };
 
-                        // Second iteration: update the selected polygon
-                        if let Some(selected_polygon) = editor.polygons.get_mut(index) {
-                            selected_polygon.update_data_from_fill(
-                                &window_size,
-                                &device,
-                                [
-                                    selected_polygon.fill[0],
-                                    selected_polygon.fill[1],
-                                    color_to_wgpu(
-                                        string_to_f32(&value).expect("Couldn't convert string"),
-                                    ),
-                                    selected_polygon.fill[3],
-                                ],
-                            );
+                            // Second iteration: update the selected polygon
+                            if let Some(selected_polygon) = editor.polygons.get_mut(index) {
+                                selected_polygon.update_data_from_fill(
+                                    &window_size,
+                                    &device,
+                                    [
+                                        selected_polygon.fill[0],
+                                        selected_polygon.fill[1],
+                                        color_to_wgpu(
+                                            string_to_f32(&value).expect("Couldn't convert string"),
+                                        ),
+                                        selected_polygon.fill[3],
+                                    ],
+                                );
+                            }
+                        } else {
+                            println!("No polygon found with the selected ID: {}", selected_id);
                         }
-                    } else {
-                        println!("No polygon found with the selected ID: {}", selected_id);
                     }
-                }
-            }),
-        ),
+                }),
+            )
+            .style(move |s| s.width(thirds)),
+        ))
+        .style(move |s| {
+            s.width(aside_width)
+            // .display(Display::Grid)
+            // .grid_template_columns(vec![TrackSizingFunction::Repeat(
+            //     // floem::taffy::GridTrackRepetition::Count(3),
+            //     GridTrackRepetition::AutoFill,
+            //     vec![MinMax::from(MinMax {
+            //         min: MinTrackSizingFunction::Fixed(LengthPercentage::Length(100.0)),
+            //         max: MaxTrackSizingFunction::Fraction(1.0),
+            //     })],
+            // )])
+        }),
         styled_input(
             "Border Radius:".to_string(),
             &selected_polygon_data

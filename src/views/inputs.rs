@@ -49,7 +49,7 @@ use floem::{
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
-use floem::unit::{DurationUnitExt, UnitExt};
+use floem::unit::{Auto, DurationUnitExt, Pct, UnitExt};
 use std::time::Duration;
 
 pub fn styled_input(
@@ -60,8 +60,8 @@ pub fn styled_input(
 ) -> impl IntoView {
     let value = create_rw_signal(initial_value.to_string());
 
-    h_stack((
-        label(move || label_text.clone()).style(|s| s.min_width(100)),
+    v_stack((
+        label(move || label_text.clone()).style(|s| s.font_size(10.0).margin_bottom(1.0)),
         text_input(value)
             .on_event_stop(EventListener::KeyUp, move |event: &Event| {
                 if let Event::KeyUp(key) = event {
@@ -84,12 +84,13 @@ pub fn styled_input(
             })
             .placeholder(placeholder)
             .style(|s| {
-                s.border(1)
+                s.width_full()
+                    .border(1)
                     .border_color(Color::GRAY)
                     .border_radius(4)
                     .padding_horiz(5)
                     .padding_vert(3)
             }),
     ))
-    .style(|s| s.items_center().margin_bottom(10))
+    .style(|s| s.margin_bottom(10))
 }
