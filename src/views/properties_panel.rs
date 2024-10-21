@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
+use std::fmt::Display;
 use std::fs;
 use std::path::Path;
 use std::rc::{Rc, Weak};
@@ -21,19 +22,20 @@ use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
 use floem::taffy::{
-    AlignItems, Display, GridTrackRepetition, LengthPercentage, MaxTrackSizingFunction, MinMax,
+    AlignItems, GridTrackRepetition, LengthPercentage, MaxTrackSizingFunction, MinMax,
     MinTrackSizingFunction, TrackSizingFunction,
 };
 use floem::text::Weight;
 use floem::views::editor::view;
 use floem::views::{
     container, dyn_container, empty, label, scroll, stack, tab, text_input, virtual_stack,
-    VirtualDirection, VirtualItemSize,
+    RadioButton, StackExt, VirtualDirection, VirtualItemSize,
 };
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::dpi::{LogicalSize, PhysicalSize};
 use floem_winit::event::{ElementState, MouseButton};
+use strum_macros::EnumIter;
 use uuid::Uuid;
 // use views::buttons::{nav_button, option_button, small_button};
 // use winit::{event_loop, window};

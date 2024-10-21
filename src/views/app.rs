@@ -76,6 +76,8 @@ pub fn app_view(
     let polygon_selected = create_rw_signal(false);
     let selected_polygon_id = create_rw_signal(Uuid::nil());
     let selected_polygon_data = create_rw_signal(PolygonConfig {
+        id: Uuid::nil(),
+        name: String::new(),
         points: Vec::new(),
         dimensions: (100.0, 100.0),
         position: Point { x: 0.0, y: 0.0 },

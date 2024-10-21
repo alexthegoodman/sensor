@@ -2356,6 +2356,8 @@ dependencies = [
  "floem_renderer",
  "im",
  "once_cell",
+ "strum",
+ "strum_macros",
  "uuid",
  "wgpu",
 ]

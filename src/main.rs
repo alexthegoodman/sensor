@@ -47,7 +47,9 @@ mod views;
 //     }
 // }
 
-type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
+pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
+pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(Vec<PolygonConfig>)>>;
+
 use std::ops::Not;
 
 type RenderCallback<'a> = dyn for<'b> Fn(
@@ -573,7 +575,7 @@ fn main() {
                 // );
 
                 // Create a triangle
-                editor.polygons.push(Polygon::new(
+                editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
                     vec![
@@ -588,7 +590,7 @@ fn main() {
                 ));
 
                 // Create a rectangle
-                editor.polygons.push(Polygon::new(
+                editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
                     vec![
@@ -604,7 +606,7 @@ fn main() {
                 ));
 
                 // Create a pentagon
-                editor.polygons.push(Polygon::new(
+                editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
                     vec![
