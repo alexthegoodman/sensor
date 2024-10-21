@@ -425,6 +425,8 @@ dependencies = [
  "futures",
  "lyon_tessellation",
  "pollster",
+ "strum",
+ "strum_macros",
  "uuid",
  "wgpu",
  "winit",

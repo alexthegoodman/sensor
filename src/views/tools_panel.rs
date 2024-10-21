@@ -11,7 +11,7 @@ use common_vector::basic::{
     color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
-use common_vector::editor::{self, Editor, Viewport};
+use common_vector::editor::{self, ControlMode, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig};
 use floem::peniko::Color;
@@ -22,7 +22,7 @@ use floem::views::{
     container, dyn_container, dyn_stack, empty, label, list, scroll, stack, tab, text_input,
     virtual_stack, RadioButton, StackExt, VirtualDirection, VirtualItemSize,
 };
-use strum_macros::EnumIter;
+
 use uuid::Uuid;
 // use views::buttons::{nav_button, option_button, small_button};
 // use winit::{event_loop, window};
@@ -42,24 +42,10 @@ use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
 use crate::LayersUpdateHandler;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use super::buttons::{layer_button, option_button};
-
-use strum::IntoEnumIterator;
-
-#[derive(Eq, PartialEq, Clone, Copy, EnumIter)]
-enum ControlMode {
-    Point,
-    Edge,
-}
-impl Display for ControlMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ControlMode::Point => f.write_str("Point"),
-            ControlMode::Edge => f.write_str("Edge"),
-        }
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LayerKind {
@@ -92,7 +78,7 @@ pub fn tools_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     viewport: Arc<Mutex<Viewport>>,
 ) -> impl IntoView {
-    let ui_update_trigger = create_rw_signal(0);
+    // let ui_update_trigger = create_rw_signal(0);
     let window_height = create_rw_signal(0.0);
     let layers: RwSignal<Vec<Layer>> = create_rw_signal(Vec::new());
 
@@ -101,6 +87,7 @@ pub fn tools_view(
     let editor_cloned = Arc::clone(&editor);
     let editor_cloned2 = Arc::clone(&editor);
     let editor_cloned3 = Arc::clone(&editor);
+    let editor_cloned4 = Arc::clone(&editor);
     let gpu_cloned = Arc::clone(&gpu_helper);
     let viewport_cloned = Arc::clone(&viewport);
 
@@ -109,6 +96,15 @@ pub fn tools_view(
     let mode_picker = ControlMode::iter()
         .map(move |fm| RadioButton::new_labeled_rw(fm, control_mode, move || fm))
         .h_stack();
+
+    create_effect({
+        move |_| {
+            let selected_mode = control_mode.get();
+            let mut editor = editor_cloned4.lock().unwrap();
+            println!("selected_mode {:?}", selected_mode);
+            editor.control_mode = selected_mode;
+        }
+    });
 
     create_effect({
         let editor_cloned3 = Arc::clone(&editor_cloned2);
@@ -148,16 +144,8 @@ pub fn tools_view(
                         // println!("Layers change {:?}", new_layers.len());
                         // layers.set(new_layers);
                         // layers.update(|c| c.push(new_layers[0].clone()));
-                        layers.update(|l| {
-                            println!(
-                                "Updating layers: old = {:?}, new = {:?}",
-                                l.len(),
-                                new_layers.len()
-                            );
-
-                            *l = new_layers
-                        });
-                        ui_update_trigger.update(|count| *count += 1);
+                        layers.update(|l| *l = new_layers);
+                        // ui_update_trigger.update(|count| *count += 1);
                     }
                 }
             }) as Box<dyn FnMut(Vec<PolygonConfig>)>)
