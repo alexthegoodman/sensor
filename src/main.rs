@@ -148,11 +148,17 @@ fn assets_view() -> impl IntoView {
 }
 
 fn tools_view(
+    gpu_helper: Arc<Mutex<GpuHelper>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    mut handler: std::sync::Arc<Mutex<Handler>>,
-    mut square_handler: std::sync::Arc<Mutex<Handler>>,
+    // editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    viewport: Arc<Mutex<Viewport>>,
+    // mut handler: std::sync::Arc<Mutex<Handler>>,
+    // mut square_handler: std::sync::Arc<Mutex<Handler>>,
 ) -> impl IntoView {
+    let editor_cloned = Arc::clone(&editor);
+    let gpu_cloned = Arc::clone(&gpu_helper);
+    let viewport_cloned = Arc::clone(&viewport);
+
     (
         // label(move || format!("Tools")).style(|s| s.margin_bottom(10)),
         container((
@@ -161,14 +167,40 @@ fn tools_view(
                 "plus",
                 Some(move || {
                     let mut editor = editor.lock().unwrap();
-                    let mut handler = handler.lock().unwrap();
+                    // let mut handler = handler.lock().unwrap();
                     println!("Handle click...");
 
-                    // if let Some(handle_click) = &editor.handle_button_click(editor) {
-                    //     println!("Handling click...");
-                    //     handle_click(editor);
-                    // }
-                    handler.handle_button_click(editor);
+                    // handler.handle_button_click(editor);
+
+                    let polygon_config = PolygonConfig {
+                        points: vec![
+                            Point { x: 0.0, y: 0.0 },
+                            Point { x: 1.0, y: 0.0 },
+                            Point { x: 0.5, y: 1.0 },
+                        ],
+                        dimensions: (100.0, 100.0),
+                        position: Point { x: 600.0, y: 100.0 },
+                        border_radius: 5.0,
+                    };
+                    let gpu_helper = gpu_helper.lock().unwrap();
+                    let device = &gpu_helper
+                        .gpu_resources
+                        .as_ref()
+                        .expect("Couldn't get gpu resources")
+                        .device;
+                    let viewport = viewport.lock().unwrap();
+                    let window_size = WindowSize {
+                        width: viewport.width as u32,
+                        height: viewport.height as u32,
+                    };
+                    editor.polygons.push(Polygon::new(
+                        &window_size,
+                        &device,
+                        polygon_config.points.clone(),
+                        polygon_config.dimensions,
+                        polygon_config.position,
+                        polygon_config.border_radius,
+                    ));
                 }),
                 false,
             )
@@ -177,15 +209,42 @@ fn tools_view(
                 "Add Square",
                 "plus",
                 Some(move || {
-                    let mut editor_cloned = editor_cloned.lock().unwrap();
-                    let mut square_handler = square_handler.lock().unwrap();
+                    let mut editor = editor_cloned.lock().unwrap();
+                    // let mut square_handler = square_handler.lock().unwrap();
                     println!("Handle square...");
 
-                    // if let Some(handle_click) = &editor.handle_button_click(editor) {
-                    //     println!("Handling click...");
-                    //     handle_click(editor);
-                    // }
-                    square_handler.handle_button_click(editor_cloned);
+                    // square_handler.handle_button_click(editor_cloned);
+
+                    let polygon_config = PolygonConfig {
+                        points: vec![
+                            Point { x: 0.0, y: 0.0 },
+                            Point { x: 1.0, y: 0.0 },
+                            Point { x: 1.0, y: 1.0 },
+                            Point { x: 0.0, y: 1.0 },
+                        ],
+                        dimensions: (100.0, 100.0),
+                        position: Point { x: 600.0, y: 100.0 },
+                        border_radius: 5.0,
+                    };
+                    let gpu_helper = gpu_cloned.lock().unwrap();
+                    let device = &gpu_helper
+                        .gpu_resources
+                        .as_ref()
+                        .expect("Couldn't get gpu resources")
+                        .device;
+                    let viewport = viewport_cloned.lock().unwrap();
+                    let window_size = WindowSize {
+                        width: viewport.width as u32,
+                        height: viewport.height as u32,
+                    };
+                    editor.polygons.push(Polygon::new(
+                        &window_size,
+                        &device,
+                        polygon_config.points.clone(),
+                        polygon_config.dimensions,
+                        polygon_config.position,
+                        polygon_config.border_radius,
+                    ));
                 }),
                 false,
             ),
@@ -202,12 +261,16 @@ use floem::unit::{DurationUnitExt, UnitExt};
 use std::time::Duration;
 
 fn tab_interface(
+    gpu_helper: Arc<Mutex<GpuHelper>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    mut handler: std::sync::Arc<Mutex<Handler>>,
-    mut square_handler: std::sync::Arc<Mutex<Handler>>,
+    // editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    viewport: Arc<Mutex<Viewport>>,
+    // mut handler: std::sync::Arc<Mutex<Handler>>,
+    // mut square_handler: std::sync::Arc<Mutex<Handler>>,
     polygon_selected: RwSignal<bool>,
 ) -> impl View {
+    // let editor_cloned = Arc::clone(&editor);
+
     let tabs: im::Vector<&str> = vec!["Tools", "Assets", "Settings"].into_iter().collect();
     let (tabs, _set_tabs) = create_signal(tabs);
     let (active_tab, set_active_tab) = create_signal(0);
@@ -322,9 +385,11 @@ fn tab_interface(
                 move || !polygon_selected.get(),
                 move |show_content| {
                     let editor = editor.clone();
-                    let editor_cloned = editor_cloned.clone();
-                    let handler = handler.clone();
-                    let square_handler = square_handler.clone();
+                    // let editor_cloned = editor_cloned.clone();
+                    let viewport = viewport.clone();
+                    let gpu_helper = gpu_helper.clone();
+                    // let handler = handler.clone();
+                    // let square_handler = square_handler.clone();
                     if show_content {
                         tab(
                             move || active_tab.get(),
@@ -332,10 +397,12 @@ fn tab_interface(
                             |it| *it,
                             move |it| match it {
                                 "Tools" => tools_view(
+                                    gpu_helper.clone(),
                                     editor.clone(),
-                                    editor_cloned.clone(),
-                                    handler.clone(),
-                                    square_handler.clone(),
+                                    // editor_cloned.clone(),
+                                    viewport.clone(),
+                                    // handler.clone(),
+                                    // square_handler.clone(),
                                 )
                                 .into_any(),
                                 "Assets" => assets_view().into_any(),
@@ -401,6 +468,7 @@ fn styled_input(
 fn properties_view(
     gpu_helper: Arc<Mutex<GpuHelper>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
     polygon_selected: RwSignal<bool>,
     selected_polygon_id: RwSignal<Uuid>,
     selected_polygon_data: RwSignal<PolygonConfig>,
@@ -682,13 +750,19 @@ use std::ops::Not;
 fn app_view(
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     gpu_helper: Arc<Mutex<GpuHelper>>,
-    editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    editor_cloned2: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    editor_cloned3: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    editor_cloned4: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
-    mut handler: std::sync::Arc<Mutex<Handler>>,
-    mut square_handler: std::sync::Arc<Mutex<Handler>>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
+    // editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    // editor_cloned2: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    // editor_cloned3: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    // editor_cloned4: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    // mut handler: std::sync::Arc<Mutex<Handler>>,
+    // mut square_handler: std::sync::Arc<Mutex<Handler>>,
 ) -> impl IntoView {
+    let editor_cloned = Arc::clone(&editor);
+    let editor_cloned2 = Arc::clone(&editor);
+    let editor_cloned3 = Arc::clone(&editor);
+    let editor_cloned4 = Arc::clone(&editor);
+
     // // let (counter, mut set_counter) = create_signal(0);
     // let (polygon_selected, mut set_polygon_selected) = create_signal(false);
     // let (selected_polygon_id, mut set_selected_polygon_id) = create_signal(Uuid::nil());
@@ -766,10 +840,12 @@ fn app_view(
     container((
         // label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
         tab_interface(
+            gpu_helper.clone(),
             editor,
-            editor_cloned,
-            handler,
-            square_handler,
+            // editor_cloned,
+            viewport.clone(),
+            // handler,
+            // square_handler,
             polygon_selected,
         ),
         dyn_container(
@@ -779,6 +855,7 @@ fn app_view(
                     properties_view(
                         gpu_helper.clone(),
                         editor_cloned4.clone(),
+                        viewport.clone(),
                         polygon_selected,
                         selected_polygon_id,
                         selected_polygon_data,
@@ -1136,6 +1213,20 @@ fn handle_window_resize(
 }
 
 fn main() {
+    // let guard = pprof::ProfilerGuardBuilder::default()
+    //     .frequency(1000)
+    //     .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+    //     .build()
+    //     .unwrap();
+
+    // std::thread::spawn(|| {
+    //     std::thread::sleep(Duration::from_secs(10));
+    //     if let Ok(report) = guard.report().build() {
+    //         let file = File::create("flamegraph.svg").unwrap();
+    //         report.flamegraph(file).unwrap();
+    //     };
+    // });
+
     let app = Application::new();
 
     // Get the primary monitor's size
@@ -1165,7 +1256,9 @@ fn main() {
     let mut handler = Arc::new(Mutex::new(Handler::new()));
     let mut square_handler = Arc::new(Mutex::new(Handler::new()));
 
-    // let viewport = Arc::new(Mutex::new(viewport));
+    let cloned_viewport = Arc::clone(&viewport);
+    let cloned_viewport2 = Arc::clone(&viewport);
+    let cloned_viewport3 = Arc::clone(&viewport);
 
     let cloned_handler = Arc::clone(&handler);
     let cloned_square_handler = Arc::clone(&square_handler);
@@ -1187,12 +1280,13 @@ fn main() {
             app_view(
                 Arc::clone(&editor),
                 Arc::clone(&gpu_helper),
-                cloned6,
-                cloned8,
-                cloned9,
-                cloned10,
-                handler,
-                cloned_square_handler6,
+                Arc::clone(&viewport),
+                // cloned6,
+                // cloned8,
+                // cloned9,
+                // cloned10,
+                // handler,
+                // cloned_square_handler6,
             )
         },
         Some(
@@ -1359,15 +1453,21 @@ fn main() {
 
                 println!("Initialized...");
 
-                window_handle.handle_cursor_moved =
-                    handle_cursor_moved(cloned2.clone(), gpu_resources.clone(), viewport.clone());
-                window_handle.handle_mouse_input =
-                    handle_mouse_input(cloned3.clone(), gpu_resources.clone(), viewport.clone());
+                window_handle.handle_cursor_moved = handle_cursor_moved(
+                    cloned2.clone(),
+                    gpu_resources.clone(),
+                    cloned_viewport.clone(),
+                );
+                window_handle.handle_mouse_input = handle_mouse_input(
+                    cloned3.clone(),
+                    gpu_resources.clone(),
+                    cloned_viewport2.clone(),
+                );
                 window_handle.handle_window_resized = handle_window_resize(
                     cloned7,
                     gpu_resources.clone(),
                     gpu_cloned3,
-                    viewport.clone(),
+                    cloned_viewport3.clone(),
                 );
 
                 let editor_clone = cloned4.clone();
@@ -1377,38 +1477,38 @@ fn main() {
 
                 // editor.handle_button_click =
                 //     handle_button_click(editor_clone, gpu_resources.clone(), window_size);
-                let mut cloned_handler = cloned_handler.lock().unwrap();
-                cloned_handler.set_button_handler(
-                    Arc::clone(&gpu_resources),
-                    viewport.clone(),
-                    PolygonConfig {
-                        points: vec![
-                            Point { x: 0.0, y: 0.0 },
-                            Point { x: 1.0, y: 0.0 },
-                            Point { x: 0.5, y: 1.0 },
-                        ],
-                        dimensions: (100.0, 100.0),
-                        position: Point { x: 600.0, y: 100.0 },
-                        border_radius: 5.0,
-                    },
-                );
+                // let mut cloned_handler = cloned_handler.lock().unwrap();
+                // cloned_handler.set_button_handler(
+                //     Arc::clone(&gpu_resources),
+                //     viewport.clone(),
+                //     PolygonConfig {
+                //         points: vec![
+                //             Point { x: 0.0, y: 0.0 },
+                //             Point { x: 1.0, y: 0.0 },
+                //             Point { x: 0.5, y: 1.0 },
+                //         ],
+                //         dimensions: (100.0, 100.0),
+                //         position: Point { x: 600.0, y: 100.0 },
+                //         border_radius: 5.0,
+                //     },
+                // );
 
-                let mut cloned_square_handler = cloned_square_handler.lock().unwrap();
-                cloned_square_handler.set_button_handler(
-                    Arc::clone(&gpu_resources),
-                    viewport.clone(),
-                    PolygonConfig {
-                        points: vec![
-                            Point { x: 0.0, y: 0.0 },
-                            Point { x: 1.0, y: 0.0 },
-                            Point { x: 1.0, y: 1.0 },
-                            Point { x: 0.0, y: 1.0 },
-                        ],
-                        dimensions: (100.0, 100.0),
-                        position: Point { x: 600.0, y: 100.0 },
-                        border_radius: 5.0,
-                    },
-                );
+                // let mut cloned_square_handler = cloned_square_handler.lock().unwrap();
+                // cloned_square_handler.set_button_handler(
+                //     Arc::clone(&gpu_resources),
+                //     viewport.clone(),
+                //     PolygonConfig {
+                //         points: vec![
+                //             Point { x: 0.0, y: 0.0 },
+                //             Point { x: 1.0, y: 0.0 },
+                //             Point { x: 1.0, y: 1.0 },
+                //             Point { x: 0.0, y: 1.0 },
+                //         ],
+                //         dimensions: (100.0, 100.0),
+                //         position: Point { x: 600.0, y: 100.0 },
+                //         border_radius: 5.0,
+                //     },
+                // );
 
                 // Create a triangle
                 editor.polygons.push(Polygon::new(
