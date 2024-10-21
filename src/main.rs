@@ -178,6 +178,7 @@ fn tab_interface(
     editor_cloned: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     mut handler: std::sync::Arc<Mutex<Handler>>,
     mut square_handler: std::sync::Arc<Mutex<Handler>>,
+    polygon_selected: RwSignal<bool>,
 ) -> impl View {
     let tabs: im::Vector<&str> = vec!["Tools", "Assets", "Settings"].into_iter().collect();
     let (tabs, _set_tabs) = create_signal(tabs);
@@ -266,27 +267,64 @@ fn tab_interface(
     })
     .scroll_style(|s| s.shrink_to_fit());
 
-    let tab_content = tab(
-        move || active_tab.get(),
-        move || tabs.get(),
-        |it| *it,
-        move |it| match it {
-            "Tools" => tools_view(
-                editor.clone(),
-                editor_cloned.clone(),
-                handler.clone(),
-                square_handler.clone(),
-            )
-            .into_any(),
-            "Assets" => assets_view().into_any(),
-            "Settings" => settings_view().into_any(),
-            _ => label(|| "Not implemented".to_owned()).into_any(),
-        },
-    )
-    .style(|s| s.flex_col().items_start());
+    // let tab_content = tab(
+    //     move || active_tab.get(),
+    //     move || tabs.get(),
+    //     |it| *it,
+    //     move |it| match it {
+    //         "Tools" => tools_view(
+    //             editor.clone(),
+    //             editor_cloned.clone(),
+    //             handler.clone(),
+    //             square_handler.clone(),
+    //         )
+    //         .into_any(),
+    //         "Assets" => assets_view().into_any(),
+    //         "Settings" => settings_view().into_any(),
+    //         _ => label(|| "Not implemented".to_owned()).into_any(),
+    //     },
+    // )
+    // .style(|s| s.flex_col().items_start());
 
-    container(container((list, tab_content)).style(|s| s.flex_col().width_full().height_full()))
-        .style(|s| s.width_full().height_full())
+    container(
+        container((
+            list,
+            dyn_container(
+                move || !polygon_selected.get(),
+                move |show_content| {
+                    let editor = editor.clone();
+                    let editor_cloned = editor_cloned.clone();
+                    let handler = handler.clone();
+                    let square_handler = square_handler.clone();
+                    if show_content {
+                        tab(
+                            move || active_tab.get(),
+                            move || tabs.get(),
+                            |it| *it,
+                            move |it| match it {
+                                "Tools" => tools_view(
+                                    editor.clone(),
+                                    editor_cloned.clone(),
+                                    handler.clone(),
+                                    square_handler.clone(),
+                                )
+                                .into_any(),
+                                "Assets" => assets_view().into_any(),
+                                "Settings" => settings_view().into_any(),
+                                _ => label(|| "Not implemented".to_owned()).into_any(),
+                            },
+                        )
+                        .style(|s| s.flex_col().items_start())
+                        .into_any()
+                    } else {
+                        empty().into_any()
+                    }
+                },
+            ),
+        ))
+        .style(|s| s.flex_col().width_full().height_full()),
+    )
+    .style(|s| s.width_full().height_full())
 }
 
 fn styled_input(label_text: String, initial_value: &str, placeholder: &str) -> impl IntoView {
@@ -382,9 +420,10 @@ fn properties_view(
             .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
     })
     .style(|s| {
-        s.absolute()
+        s
+            // .absolute()
             .height(800.0)
-            .margin_left(-125.0)
+            .margin_left(0.0)
             .margin_top(20)
             .z_index(10)
     })
@@ -478,7 +517,13 @@ fn app_view(
 
     container((
         // label(move || format!("Value: {counter}")).style(|s| s.margin_bottom(10)),
-        tab_interface(editor, editor_cloned, handler, square_handler),
+        tab_interface(
+            editor,
+            editor_cloned,
+            handler,
+            square_handler,
+            polygon_selected,
+        ),
         dyn_container(
             move || polygon_selected.get(),
             move |polygon_selected_real| {
@@ -552,9 +597,10 @@ fn small_button(
             .align_items(AlignItems::Center)
             .background(Color::WHITE)
             .border_radius(15)
-            .transition(Background, Transition::ease_in_out(400.millis()))
+            .transition(Background, Transition::ease_in_out(200.millis()))
             .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
             .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
+            .z_index(20)
     })
 }
 
@@ -582,7 +628,7 @@ fn nav_button(
             .box_shadow_blur(15)
             .box_shadow_spread(4)
             .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
-            .transition(Background, Transition::ease_in_out(400.millis()))
+            .transition(Background, Transition::ease_in_out(200.millis()))
             .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
             .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
     })
@@ -610,20 +656,26 @@ fn option_button(
             .border(1.0)
             .border_color(Color::GRAY)
             .border_radius(15)
-            .transition(Background, Transition::ease_in_out(400.millis()))
+            .transition(Background, Transition::ease_in_out(200.millis()))
             .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
             .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
     })
 }
 
-type RenderCallback<'a> = dyn for<'b> Fn(wgpu::CommandEncoder, wgpu::SurfaceTexture, wgpu::TextureView, &WindowHandle)
-    + 'a;
+type RenderCallback<'a> = dyn for<'b> Fn(
+        wgpu::CommandEncoder,
+        wgpu::SurfaceTexture,
+        wgpu::TextureView,
+        wgpu::TextureView,
+        &WindowHandle,
+    ) + 'a;
 
 fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
     Box::new(
         move |mut encoder: wgpu::CommandEncoder,
               frame: wgpu::SurfaceTexture,
               view: wgpu::TextureView,
+              resolve_view: wgpu::TextureView,
               window_handle: &WindowHandle| {
             let mut handle = window_handle.borrow();
 
@@ -646,7 +698,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         label: None,
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &view,
-                            resolve_target: None,
+                            resolve_target: Some(&resolve_view),
                             ops: wgpu::Operations {
                                 // load: wgpu::LoadOp::Clear(wgpu::Color {
                                 //     // grey background
@@ -659,7 +711,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                                 //     // b: 1.0,
                                 //     a: 1.0,
                                 // }),
-                                // load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                // load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                                 load: wgpu::LoadOp::Load,
                                 store: wgpu::StoreOp::Store,
                             },
@@ -785,7 +837,6 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                 // gpu_resources.queue.submit(Some(encoder.finish()));
                 // frame.present();
 
-                // implement here?
                 let command_buffer = encoder.finish();
                 gpu_resources.queue.submit(Some(command_buffer));
                 gpu_resources.device.poll(wgpu::Maintain::Wait);
@@ -1097,7 +1148,7 @@ fn main() {
                             },
                             depth_stencil: Some(depth_stencil_state), // Optional, only if you are using depth testing
                             multisample: wgpu::MultisampleState {
-                                count: 1,
+                                count: 4, // effect performance
                                 mask: !0,
                                 alpha_to_coverage_enabled: false,
                             },
