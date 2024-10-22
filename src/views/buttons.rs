@@ -2,8 +2,10 @@ use std::borrow::{Borrow, BorrowMut};
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use common_vector::basic::rgb_to_wgpu;
 use floem::event::{Event, EventListener, EventPropagation};
-use floem::peniko::Color;
+use floem::kurbo::Point;
+use floem::peniko::{Brush, Color, ColorStop, ColorStops, Extend, Gradient, GradientKind};
 use floem::style::{Background, CursorStyle, Transition};
 use floem::taffy::AlignItems;
 use floem::views::{
@@ -70,6 +72,60 @@ pub fn small_button(
             .justify_center()
             .align_items(AlignItems::Center)
             .background(Color::WHITE)
+            .border(0)
+            // .border_color(Color::BLACK)
+            .border_radius(15)
+            .transition(Background, Transition::ease_in_out(200.millis()))
+            .focus_visible(|s| s.border(2.).border_color(Color::BLUE))
+            .hover(|s| s.background(Color::LIGHT_GRAY).cursor(CursorStyle::Pointer))
+            .z_index(20)
+    })
+}
+
+pub fn success_button(
+    text: &'static str,
+    icon_name: &'static str,
+    action: Option<impl FnMut() + 'static>,
+    active: bool,
+) -> impl IntoView {
+    // Radial gradient with different start and end circles
+    let green = rgb_to_wgpu(153, 199, 162, 1.0);
+    let yellow = rgb_to_wgpu(200, 204, 124, 1.0);
+    // let green = (153, 199, 162, 1.0);
+    // let yellow = (200, 204, 124, 1.0);
+
+    // Linear gradient from left to right
+    let gradient = Gradient {
+        kind: GradientKind::Linear {
+            start: Point::new(50.0, 0.0), // Start further left
+            end: Point::new(200.0, 50.0), // End further right to allow more space
+        },
+        extend: Extend::Pad,
+        stops: ColorStops::from_vec(vec![
+            ColorStop {
+                offset: 0.5,
+                color: Color::rgb(green[0] as f64, green[1] as f64, green[2] as f64),
+            },
+            ColorStop {
+                offset: 1.0,
+                color: Color::rgb(yellow[0] as f64, yellow[1] as f64, yellow[2] as f64),
+            },
+        ]),
+    };
+
+    button(
+        v_stack((
+            svg(create_icon(icon_name)).style(|s| s.width(24).height(24).color(Color::BLACK)),
+            label(move || text).style(|s| s.margin_top(4.0)),
+        ))
+        .style(|s| s.justify_center().align_items(AlignItems::Center)),
+    )
+    .action(action)
+    .style(move |s| {
+        s.height(28)
+            .justify_center()
+            .align_items(AlignItems::Center)
+            .background(Brush::Gradient(gradient.clone()))
             .border(0)
             // .border_color(Color::BLACK)
             .border_radius(15)
