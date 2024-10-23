@@ -225,19 +225,25 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     //     y: editor.last_y,
                     // });
 
-                    let ndc_position =
-                        size_to_ndc(&window_size, editor.ds_ndc_pos.x, editor.ds_ndc_pos.y);
-                    // println!("render position {:?}", ndc_position);
+                    // let ndc_position =
+                    //     size_to_ndc(&window_size, editor.ds_ndc_pos.x, editor.ds_ndc_pos.y);
+                    let ndc_position = point_to_ndc(editor.last_top_left, &window_size); // is drifting
+                                                                                         // let ndc_position = editor.ndc;
+                                                                                         // let ndc_position = point_to_ndc(editor.last_world, &window_size);
+                                                                                         // println!(
+                                                                                         //     "render position {:?} {:?}",
+                                                                                         //     editor.last_top_left, ndc_position
+                                                                                         // );
                     let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                         &gpu_resources.device,
                         &window_size,
                         // Point {
-                        //     x: point_to_render.x,
-                        //     y: point_to_render.y,
+                        //     x: ndc_position.0,
+                        //     y: ndc_position.1,
                         // },
                         Point {
-                            x: ndc_position.0,
-                            y: ndc_position.1,
+                            x: ndc_position.x,
+                            y: ndc_position.y,
                         },
                         rgb_to_wgpu(47, 131, 222, 1.0),
                         &camera,
