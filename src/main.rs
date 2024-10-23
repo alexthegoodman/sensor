@@ -251,8 +251,12 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         // let point_to_render = editor.camera.get_view_projection_matrix()
                         //     * Vector4::new(edge_point.point.x, edge_point.point.y, 0.0, 1.0);
                         // let camera = editor.camera.expect("Couldn't get camera");
+                        // let edge_point_screen = camera.world_to_screen(edge_point.point); // maybe the camera moves so this doesn't have to?
                         let ndc_position = point_to_ndc(edge_point.point, &window_size);
-                        println!("hover ndc {:?} {:?}", edge_point.point, ndc_position);
+                        // println!(
+                        //     "hover ndc {:?} {:?} {:?}",
+                        //     camera.position, edge_point.point, ndc_position
+                        // );
                         let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                             &gpu_resources.device,
                             &window_size,
