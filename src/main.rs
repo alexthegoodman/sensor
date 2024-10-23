@@ -10,7 +10,7 @@ use common_vector::basic::{
 use common_vector::camera::{Camera, CameraBinding};
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, size_to_ndc, visualize_ray_intersection, Editor, Viewport};
-use common_vector::guideline::create_guide_line_buffers;
+use common_vector::guideline::{create_guide_line_buffers, point_to_ndc};
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
 use floem::kurbo::Size;
@@ -79,8 +79,8 @@ pub fn render_ray_intersection(
         device,
         window_size,
         Point {
-            x: editor.last_x,
-            y: editor.last_y,
+            x: editor.ds_ndc_pos.x,
+            y: editor.ds_ndc_pos.y,
         },
         rgb_to_wgpu(47, 131, 222, 1.0), // Blue dot
         camera,
@@ -224,7 +224,9 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     //     x: editor.last_x,
                     //     y: editor.last_y,
                     // });
-                    let ndc_position = size_to_ndc(&window_size, editor.last_x, editor.last_y);
+
+                    let ndc_position =
+                        size_to_ndc(&window_size, editor.ds_ndc_pos.x, editor.ds_ndc_pos.y);
                     // println!("render position {:?}", ndc_position);
                     let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                         &gpu_resources.device,
@@ -249,8 +251,8 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         // let point_to_render = editor.camera.get_view_projection_matrix()
                         //     * Vector4::new(edge_point.point.x, edge_point.point.y, 0.0, 1.0);
                         // let camera = editor.camera.expect("Couldn't get camera");
-                        let ndc_position =
-                            size_to_ndc(&window_size, edge_point.point.x, edge_point.point.y);
+                        let ndc_position = point_to_ndc(edge_point.point, &window_size);
+                        println!("hover ndc {:?} {:?}", edge_point.point, ndc_position);
                         let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                             &gpu_resources.device,
                             &window_size,
@@ -259,8 +261,8 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                             //     y: point_to_render.y,
                             // },
                             Point {
-                                x: ndc_position.0,
-                                y: ndc_position.1,
+                                x: ndc_position.x,
+                                y: ndc_position.y,
                             },
                             rgb_to_wgpu(47, 131, 222, 1.0),
                             &camera,
@@ -404,8 +406,8 @@ fn handle_mouse_wheel(
         // viewport.width = size.width as f32;
         // viewport.height = size.height as f32;
         let mouse_pos = Point {
-            x: editor.last_x,
-            y: editor.last_y,
+            x: editor.ds_ndc_pos.x,
+            y: editor.ds_ndc_pos.y,
         };
 
         match delta {
