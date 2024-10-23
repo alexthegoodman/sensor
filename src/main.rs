@@ -3,11 +3,13 @@ use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use bytemuck::Contiguous;
+use cgmath::Vector4;
 use common_vector::basic::{
     color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
 };
+use common_vector::camera::{Camera, CameraBinding};
 use common_vector::dot::draw_dot;
-use common_vector::editor::{self, Editor, Viewport};
+use common_vector::editor::{self, size_to_ndc, visualize_ray_intersection, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
@@ -15,7 +17,7 @@ use floem::kurbo::Size;
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::dpi::{LogicalSize, PhysicalSize};
-use floem_winit::event::{ElementState, MouseButton};
+use floem_winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use uuid::Uuid;
 use views::app::app_view;
 use views::buttons::{nav_button, option_button, small_button};
@@ -51,6 +53,45 @@ pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonCon
 pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(Vec<PolygonConfig>)>>;
 
 use std::ops::Not;
+
+use cgmath::InnerSpace;
+use cgmath::SquareMatrix;
+use cgmath::Transform;
+use cgmath::{Matrix4, Point3, Vector3};
+
+// // Add a Point struct if not already defined
+// #[derive(Debug, Clone, Copy)]
+// pub struct Point {
+//     pub x: f32,
+//     pub y: f32,
+// }
+
+// Usage in render pass:
+pub fn render_ray_intersection(
+    render_pass: &mut wgpu::RenderPass,
+    device: &wgpu::Device,
+    window_size: &WindowSize,
+    editor: &Editor,
+    camera: &Camera,
+) {
+    // if let ray = visualize_ray_intersection(window_size, editor.last_x, editor.last_y, camera) {
+    let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
+        device,
+        window_size,
+        Point {
+            x: editor.last_x,
+            y: editor.last_y,
+        },
+        rgb_to_wgpu(47, 131, 222, 1.0), // Blue dot
+        camera,
+    );
+
+    // println!("render ray");
+    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+    render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+    // }
+}
 
 type RenderCallback<'a> = dyn for<'b> Fn(
         wgpu::CommandEncoder,
@@ -134,8 +175,22 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                         .lock()
                         .unwrap();
 
+                    let camera_binding = editor
+                        .camera_binding
+                        .as_ref()
+                        .expect("Couldn't get camera binding");
+
+                    // camera_binding.update(&gpu_resources.queue, &editor.camera);
+                    // editor.update_camera_binding(&gpu_resources.queue);
+
+                    render_pass.set_bind_group(0, &camera_binding.bind_group, &[]);
+
                     for (poly_index, polygon) in editor.polygons.iter().enumerate() {
                         // println!("Indices length {:?}", polygon.indices.len());
+                        // println!(
+                        //     "Polygon position {:?} {:?}",
+                        //     polygon.transform.position, polygon.vertices[0]
+                        // );
                         render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
                         render_pass.set_index_buffer(
                             polygon.index_buffer.slice(..),
@@ -152,12 +207,63 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
 
                     // println!("Render size {:?}", window_size);
 
+                    let camera = editor.camera.expect("Couldn't get camera");
+                    // let zoomed_pos = Point {
+                    //     x: editor.last_x / camera.zoom,
+                    //     y: editor.last_y / camera.zoom,
+                    // };
+                    // render_ray_intersection(
+                    //     &mut render_pass,
+                    //     &gpu_resources.device,
+                    //     &window_size,
+                    //     &editor,
+                    //     &camera,
+                    // );
+
+                    // let screen_pos = camera.world_to_screen(Point {
+                    //     x: editor.last_x,
+                    //     y: editor.last_y,
+                    // });
+                    let ndc_position = size_to_ndc(&window_size, editor.last_x, editor.last_y);
+                    // println!("render position {:?}", ndc_position);
+                    let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
+                        &gpu_resources.device,
+                        &window_size,
+                        // Point {
+                        //     x: point_to_render.x,
+                        //     y: point_to_render.y,
+                        // },
+                        Point {
+                            x: ndc_position.0,
+                            y: ndc_position.1,
+                        },
+                        rgb_to_wgpu(47, 131, 222, 1.0),
+                        &camera,
+                    ); // Green dot
+
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+
                     if let Some(edge_point) = editor.hover_point {
+                        // let point_to_render = editor.camera.get_view_projection_matrix()
+                        //     * Vector4::new(edge_point.point.x, edge_point.point.y, 0.0, 1.0);
+                        // let camera = editor.camera.expect("Couldn't get camera");
+                        let ndc_position =
+                            size_to_ndc(&window_size, edge_point.point.x, edge_point.point.y);
                         let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                             &gpu_resources.device,
                             &window_size,
-                            edge_point.point,
+                            // Point {
+                            //     x: point_to_render.x,
+                            //     y: point_to_render.y,
+                            // },
+                            Point {
+                                x: ndc_position.0,
+                                y: ndc_position.1,
+                            },
                             rgb_to_wgpu(47, 131, 222, 1.0),
+                            &camera,
                         ); // Green dot
 
                         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -201,23 +307,25 @@ fn handle_cursor_moved(
     gpu_resources: std::sync::Arc<GpuResources>,
     // window_size: WindowSize,
     viewport: std::sync::Arc<Mutex<Viewport>>,
-) -> Option<Box<dyn Fn(f64, f64)>> {
-    Some(Box::new(move |positionX: f64, positionY: f64| {
-        let mut editor = editor.lock().unwrap();
-        let viewport = viewport.lock().unwrap();
-        let window_size = WindowSize {
-            width: viewport.width as u32,
-            height: viewport.height as u32,
-        };
-        // println!("window size {:?}", window_size);
-        // println!("positions {:?} {:?}", positionX, positionY);
-        editor.handle_mouse_move(
-            &window_size,
-            &gpu_resources.device,
-            positionX as f32,
-            positionY as f32,
-        );
-    }))
+) -> Option<Box<dyn Fn(f64, f64, f64, f64)>> {
+    Some(Box::new(
+        move |positionX: f64, positionY: f64, logPosX: f64, logPoxY: f64| {
+            let mut editor = editor.lock().unwrap();
+            let viewport = viewport.lock().unwrap();
+            let window_size = WindowSize {
+                width: viewport.width as u32,
+                height: viewport.height as u32,
+            };
+            // println!("window size {:?}", window_size);
+            // println!("positions {:?} {:?}", positionX, positionY);
+            editor.handle_mouse_move(
+                &window_size,
+                &gpu_resources.device,
+                positionX as f32,
+                positionY as f32,
+            );
+        },
+    ))
 }
 
 fn handle_mouse_input(
@@ -273,6 +381,47 @@ fn handle_window_resize(
             .lock()
             .unwrap()
             .recreate_depth_view(&gpu_resources, &window_size);
+    }))
+}
+
+fn handle_mouse_wheel(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    // window_size: WindowSize, // need newest window size
+    // gpu_helper: std::sync::Arc<Mutex<GpuHelper>>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
+) -> Option<Box<dyn FnMut(MouseScrollDelta)>> {
+    Some(Box::new(move |delta: MouseScrollDelta| {
+        let mut editor = editor.lock().unwrap();
+
+        // let window_size = WindowSize {
+        //     width: size.width,
+        //     height: size.height,
+        // };
+
+        // let mut viewport = viewport.lock().unwrap();
+
+        // viewport.width = size.width as f32;
+        // viewport.height = size.height as f32;
+        let mouse_pos = Point {
+            x: editor.last_x,
+            y: editor.last_y,
+        };
+
+        match delta {
+            MouseScrollDelta::LineDelta(_x, y) => {
+                // y is positive for scrolling up/away from user
+                // negative for scrolling down/toward user
+                // let zoom_factor = if y > 0.0 { 1.1 } else { 0.9 };
+                editor.handle_wheel(y, mouse_pos, &gpu_resources.queue);
+            }
+            MouseScrollDelta::PixelDelta(pos) => {
+                // Convert pixel delta if needed
+                let y = pos.y as f32;
+                // let zoom_factor = if y > 0.0 { 1.1 } else { 0.9 };
+                editor.handle_wheel(y, mouse_pos, &gpu_resources.queue);
+            }
+        }
     }))
 }
 
@@ -333,11 +482,12 @@ fn main() {
     let cloned3 = Arc::clone(&editor);
     let cloned4 = Arc::clone(&editor);
     let cloned5 = Arc::clone(&editor);
-    let cloned6 = Arc::clone(&editor);
+    // let cloned6 = Arc::clone(&editor);
     let cloned7 = Arc::clone(&editor);
-    let cloned8 = Arc::clone(&editor);
-    let cloned9 = Arc::clone(&editor);
-    let cloned10 = Arc::clone(&editor);
+    // let cloned8 = Arc::clone(&editor);
+    // let cloned9 = Arc::clone(&editor);
+    // let cloned10 = Arc::clone(&editor);
+    let cloned11 = Arc::clone(&editor);
 
     let (mut app, window_id) = app.window(
         move |_| {
@@ -390,6 +540,15 @@ fn main() {
 
                 println!("Initializing pipeline...");
 
+                // let mut editor = cloned11.lock().unwrap();
+                let mut editor = cloned5.lock().unwrap();
+
+                let camera = Camera::new(window_size);
+                let camera_binding = CameraBinding::new(&gpu_resources.device);
+
+                editor.camera = Some(camera);
+                editor.camera_binding = Some(camera_binding);
+
                 let sampler = gpu_resources
                     .device
                     .create_sampler(&wgpu::SamplerDescriptor {
@@ -414,6 +573,11 @@ fn main() {
                     bias: wgpu::DepthBiasState::default(),
                 };
 
+                let camera_binding = editor
+                    .camera_binding
+                    .as_ref()
+                    .expect("Couldn't get camera binding");
+
                 // Define the layouts
                 let pipeline_layout =
                     gpu_resources
@@ -421,7 +585,7 @@ fn main() {
                         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                             label: Some("Pipeline Layout"),
                             // bind_group_layouts: &[&bind_group_layout],
-                            bind_group_layouts: &[], // No bind group layouts
+                            bind_group_layouts: &[&camera_binding.bind_group_layout], // No bind group layouts
                             push_constant_ranges: &[],
                         });
 
@@ -533,11 +697,12 @@ fn main() {
                     gpu_cloned3,
                     cloned_viewport3.clone(),
                 );
+                window_handle.handle_mouse_wheel =
+                    handle_mouse_wheel(cloned11, gpu_resources.clone(), cloned_viewport3.clone());
 
                 let editor_clone = cloned4.clone();
 
                 // test items
-                let mut editor = cloned5.lock().unwrap();
 
                 // editor.handle_button_click =
                 //     handle_button_click(editor_clone, gpu_resources.clone(), window_size);
@@ -578,6 +743,7 @@ fn main() {
                 editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
+                    &camera,
                     vec![
                         Point { x: 0.0, y: 0.0 },
                         Point { x: 1.0, y: 0.0 },
@@ -586,13 +752,15 @@ fn main() {
                     (100.0, 100.0),
                     Point { x: 600.0, y: 100.0 },
                     5.0, // border radius
-                    [0.7, 0.5, 0.3, 1.0],
+                    rgb_to_wgpu(0, 0, 255, 1.0),
+                    "Polygon Blue".to_string(),
                 ));
 
                 // Create a rectangle
                 editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
+                    &camera,
                     vec![
                         Point { x: 0.0, y: 0.0 },
                         Point { x: 1.0, y: 0.0 },
@@ -602,13 +770,15 @@ fn main() {
                     (150.0, 100.0),
                     Point { x: 900.0, y: 200.0 },
                     10.0, // border radius
-                    [0.7, 0.2, 0.8, 1.0],
+                    rgb_to_wgpu(0, 255, 0, 1.0),
+                    "Polygon Green".to_string(),
                 ));
 
                 // Create a pentagon
                 editor.add_polygon(Polygon::new(
                     &window_size,
                     &gpu_resources.device,
+                    &camera,
                     vec![
                         Point { x: 0.5, y: 0.0 },
                         Point { x: 1.0, y: 0.4 },
@@ -622,10 +792,13 @@ fn main() {
                         y: 300.0,
                     },
                     8.0, // border radius
-                    [0.9, 0.9, 0.3, 1.0],
+                    rgb_to_wgpu(255, 0, 0, 1.0),
+                    "Polygon Red".to_string(),
                 ));
 
                 // editor.polygons[0].update_data_from_dimensions(&window_size, &device, (200.0, 50.0));
+
+                editor.update_camera_binding(&gpu_resources.queue);
 
                 gpu_clonsed2.lock().unwrap().gpu_resources = Some(Arc::clone(&gpu_resources));
                 editor.gpu_resources = Some(Arc::clone(&gpu_resources));

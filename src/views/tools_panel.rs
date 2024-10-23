@@ -205,14 +205,17 @@ pub fn tools_view(
                                 width: viewport.width as u32,
                                 height: viewport.height as u32,
                             };
+                            let camera = editor.camera.expect("Couldn't get camera");
                             editor.add_polygon(Polygon::new(
                                 &window_size,
                                 &device,
+                                &camera,
                                 polygon_config.points.clone(),
                                 polygon_config.dimensions,
                                 polygon_config.position,
                                 polygon_config.border_radius,
                                 polygon_config.fill,
+                                "Polygon".to_string(),
                             ));
                         }),
                         false,
@@ -253,14 +256,17 @@ pub fn tools_view(
                                 width: viewport.width as u32,
                                 height: viewport.height as u32,
                             };
+                            let camera = editor.camera.expect("Couldn't get camera");
                             editor.add_polygon(Polygon::new(
                                 &window_size,
                                 &device,
+                                &camera,
                                 polygon_config.points.clone(),
                                 polygon_config.dimensions,
                                 polygon_config.position,
                                 polygon_config.border_radius,
                                 polygon_config.fill,
+                                "Polygon".to_string(),
                             ));
                         }),
                         false,

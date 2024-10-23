@@ -149,12 +149,15 @@ pub fn properties_view(
                                 height: viewport_height as u32,
                             };
 
+                            let camera = editor.camera.expect("Couldn't get camera");
+
                             // Second iteration: update the selected polygon
                             if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                                 selected_polygon.update_data_from_dimensions(
                                     &window_size,
                                     &device,
                                     (width, selected_polygon.dimensions.1),
+                                    &camera,
                                 );
                             }
                         } else {
@@ -202,12 +205,15 @@ pub fn properties_view(
                                 height: viewport_height as u32,
                             };
 
+                            let camera = editor.camera.expect("Couldn't get camera");
+
                             // Second iteration: update the selected polygon
                             if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                                 selected_polygon.update_data_from_dimensions(
                                     &window_size,
                                     &device,
                                     (selected_polygon.dimensions.0, height),
+                                    &camera,
                                 );
                             }
                         } else {
@@ -262,6 +268,8 @@ pub fn properties_view(
                                 height: viewport_height as u32,
                             };
 
+                            let camera = editor.camera.expect("Couldn't get camera");
+
                             // Second iteration: update the selected polygon
                             if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                                 selected_polygon.update_data_from_fill(
@@ -275,6 +283,7 @@ pub fn properties_view(
                                         selected_polygon.fill[2],
                                         selected_polygon.fill[3],
                                     ],
+                                    &camera,
                                 );
                             }
                         } else {
@@ -317,6 +326,8 @@ pub fn properties_view(
                                 height: viewport_height as u32,
                             };
 
+                            let camera = editor.camera.expect("Couldn't get camera");
+
                             // Second iteration: update the selected polygon
                             if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                                 selected_polygon.update_data_from_fill(
@@ -330,6 +341,7 @@ pub fn properties_view(
                                         selected_polygon.fill[2],
                                         selected_polygon.fill[3],
                                     ],
+                                    &camera,
                                 );
                             }
                         } else {
@@ -372,6 +384,8 @@ pub fn properties_view(
                                 height: viewport_height as u32,
                             };
 
+                            let camera = editor.camera.expect("Couldn't get camera");
+
                             // Second iteration: update the selected polygon
                             if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                                 selected_polygon.update_data_from_fill(
@@ -385,6 +399,7 @@ pub fn properties_view(
                                         ),
                                         selected_polygon.fill[3],
                                     ],
+                                    &camera,
                                 );
                             }
                         } else {
@@ -443,12 +458,15 @@ pub fn properties_view(
                             height: viewport_height as u32,
                         };
 
+                        let camera = editor.camera.expect("Couldn't get camera");
+
                         // Second iteration: update the selected polygon
                         if let Some(selected_polygon) = editor.polygons.get_mut(index) {
                             selected_polygon.update_data_from_border_radius(
                                 &window_size,
                                 &device,
                                 border_radius,
+                                &camera,
                             );
                         }
                     } else {
