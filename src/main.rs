@@ -208,39 +208,11 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     // println!("Render size {:?}", window_size);
 
                     let camera = editor.camera.expect("Couldn't get camera");
-                    // let zoomed_pos = Point {
-                    //     x: editor.last_x / camera.zoom,
-                    //     y: editor.last_y / camera.zoom,
-                    // };
-                    // render_ray_intersection(
-                    //     &mut render_pass,
-                    //     &gpu_resources.device,
-                    //     &window_size,
-                    //     &editor,
-                    //     &camera,
-                    // );
 
-                    // let screen_pos = camera.world_to_screen(Point {
-                    //     x: editor.last_x,
-                    //     y: editor.last_y,
-                    // });
-
-                    // let ndc_position =
-                    //     size_to_ndc(&window_size, editor.ds_ndc_pos.x, editor.ds_ndc_pos.y);
-                    let ndc_position = point_to_ndc(editor.last_top_left, &window_size); // is drifting
-                                                                                         // let ndc_position = editor.ndc;
-                                                                                         // let ndc_position = point_to_ndc(editor.last_world, &window_size);
-                                                                                         // println!(
-                                                                                         //     "render position {:?} {:?}",
-                                                                                         //     editor.last_top_left, ndc_position
-                                                                                         // );
+                    let ndc_position = point_to_ndc(editor.last_top_left, &window_size);
                     let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                         &gpu_resources.device,
                         &window_size,
-                        // Point {
-                        //     x: ndc_position.0,
-                        //     y: ndc_position.1,
-                        // },
                         Point {
                             x: ndc_position.x,
                             y: ndc_position.y,
@@ -254,22 +226,10 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
 
                     if let Some(edge_point) = editor.hover_point {
-                        // let point_to_render = editor.camera.get_view_projection_matrix()
-                        //     * Vector4::new(edge_point.point.x, edge_point.point.y, 0.0, 1.0);
-                        // let camera = editor.camera.expect("Couldn't get camera");
-                        // let edge_point_screen = camera.world_to_screen(edge_point.point); // maybe the camera moves so this doesn't have to?
                         let ndc_position = point_to_ndc(edge_point.point, &window_size);
-                        // println!(
-                        //     "hover ndc {:?} {:?} {:?}",
-                        //     camera.position, edge_point.point, ndc_position
-                        // );
                         let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                             &gpu_resources.device,
                             &window_size,
-                            // Point {
-                            //     x: point_to_render.x,
-                            //     y: point_to_render.y,
-                            // },
                             Point {
                                 x: ndc_position.x,
                                 y: ndc_position.y,
