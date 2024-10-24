@@ -40,6 +40,8 @@ pub fn create_icon(name: &str) -> String {
         "arrow-left" => include_str!("../assets/arrow-left-thin.svg"),
         "polygon" => include_str!("../assets/polygon-thin.svg"),
         "octagon" => include_str!("../assets/octagon-thin.svg"),
+        "square" => include_str!("../assets/square-thin.svg"),
+        "triangle" => include_str!("../assets/triangle-thin.svg"),
         _ => "",
     };
 

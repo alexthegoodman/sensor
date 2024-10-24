@@ -173,7 +173,7 @@ pub fn tools_view(
                 container((
                     option_button(
                         "Add Polygon",
-                        "plus",
+                        "triangle",
                         Some(move || {
                             let mut editor = editor.lock().unwrap();
                             // let mut handler = handler.lock().unwrap();
@@ -223,7 +223,7 @@ pub fn tools_view(
                     .style(|s| s.margin_right(5.0)),
                     option_button(
                         "Add Square",
-                        "plus",
+                        "square",
                         Some(move || {
                             let mut editor = editor_cloned.lock().unwrap();
                             // let mut square_handler = square_handler.lock().unwrap();
@@ -300,7 +300,7 @@ pub fn tools_view(
                     |layer| layer.instance_id, // Assuming each layer has a unique id
                     |layer| {
                         let icon_name = match layer.instance_kind {
-                            LayerKind::Polygon => "octagon",
+                            LayerKind::Polygon => "triangle",
                             // LayerKind::Path =>
                             //         // LayerKind::Imag(data) =>
                             //         // LayerKind::Text =>
