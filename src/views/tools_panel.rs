@@ -8,12 +8,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use bytemuck::Contiguous;
 use common_vector::basic::{
-    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
+    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, ControlMode, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
-use common_vector::polygon::{Polygon, PolygonConfig};
+use common_vector::polygon::{Polygon, PolygonConfig, Stroke};
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
@@ -193,6 +193,10 @@ pub fn tools_view(
                                 position: Point { x: 600.0, y: 100.0 },
                                 border_radius: 5.0,
                                 fill: [1.0, 1.0, 1.0, 1.0],
+                                stroke: Stroke {
+                                    fill: [1.0, 1.0, 1.0, 1.0],
+                                    thickness: 2.0,
+                                },
                             };
                             let gpu_helper = gpu_helper.lock().unwrap();
                             let device = &gpu_helper
@@ -244,6 +248,10 @@ pub fn tools_view(
                                 position: Point { x: 600.0, y: 100.0 },
                                 border_radius: 5.0,
                                 fill: [1.0, 1.0, 1.0, 1.0],
+                                stroke: Stroke {
+                                    fill: [1.0, 1.0, 1.0, 1.0],
+                                    thickness: 2.0,
+                                },
                             };
                             let gpu_helper = gpu_cloned.lock().unwrap();
                             let device = &gpu_helper

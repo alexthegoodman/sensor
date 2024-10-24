@@ -3,7 +3,7 @@ use uuid::Uuid;
 use wgpu::util::DeviceExt;
 
 use common_vector::basic::{
-    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
+    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::editor::{self, Editor, InputValue, Viewport};
 use common_vector::polygon::{Polygon, PolygonConfig};
@@ -37,6 +37,10 @@ pub fn properties_view(
     let editor_cloned5 = Arc::clone(&editor);
     let editor_cloned6 = Arc::clone(&editor);
     let editor_cloned7 = Arc::clone(&editor);
+    let editor_cloned8 = Arc::clone(&editor);
+    let editor_cloned9 = Arc::clone(&editor);
+    let editor_cloned10 = Arc::clone(&editor);
+    let editor_cloned11 = Arc::clone(&editor);
 
     let aside_width = 260.0;
     let quarters = (aside_width / 4.0) + (5.0 * 4.0);
@@ -124,7 +128,7 @@ pub fn properties_view(
         h_stack((
             styled_input(
                 "Red:".to_string(),
-                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[0]).to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().fill[0]).to_string(),
                 "0-255",
                 Box::new({
                     move |value| {
@@ -138,7 +142,7 @@ pub fn properties_view(
             .style(move |s| s.width(thirds).margin_right(5.0)),
             styled_input(
                 "Green:".to_string(),
-                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[1]).to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().fill[1]).to_string(),
                 "0-255",
                 Box::new({
                     move |value| {
@@ -152,7 +156,7 @@ pub fn properties_view(
             .style(move |s| s.width(thirds).margin_right(5.0)),
             styled_input(
                 "Blue:".to_string(),
-                &wgpu_to_hex(selected_polygon_data.read().borrow().fill[2]).to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().fill[2]).to_string(),
                 "0-255",
                 Box::new({
                     move |value| {
@@ -200,6 +204,75 @@ pub fn properties_view(
                 }
             }),
         ),
+        label(|| "Stroke").style(|s| s.margin_bottom(5.0)),
+        h_stack((
+            styled_input(
+                "Thickness:".to_string(),
+                &selected_polygon_data
+                    .read()
+                    .borrow()
+                    .stroke
+                    .thickness
+                    .to_string(),
+                "Enter thickness",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned8.lock().unwrap();
+
+                        editor.update_polygon(
+                            selected_id,
+                            "stroke_thickness",
+                            InputValue::Text(value),
+                        );
+                    }
+                }),
+            )
+            .style(move |s| s.width(quarters).margin_right(5.0)),
+            styled_input(
+                "Red:".to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().stroke.fill[0]).to_string(),
+                "Enter red",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned9.lock().unwrap();
+
+                        editor.update_polygon(selected_id, "stroke_red", InputValue::Text(value));
+                    }
+                }),
+            )
+            .style(move |s| s.width(quarters).margin_right(5.0)),
+            styled_input(
+                "Green:".to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().stroke.fill[1]).to_string(),
+                "Enter green",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned10.lock().unwrap();
+
+                        editor.update_polygon(selected_id, "stroke_green", InputValue::Text(value));
+                    }
+                }),
+            )
+            .style(move |s| s.width(quarters).margin_right(5.0)),
+            styled_input(
+                "Blue:".to_string(),
+                &wgpu_to_human(selected_polygon_data.read().borrow().stroke.fill[2]).to_string(),
+                "Enter blue",
+                Box::new({
+                    move |value| {
+                        let selected_id = selected_polygon_id.get();
+                        let mut editor = editor_cloned11.lock().unwrap();
+
+                        editor.update_polygon(selected_id, "stroke_blue", InputValue::Text(value));
+                    }
+                }),
+            )
+            .style(move |s| s.width(quarters)),
+        ))
+        .style(move |s| s.width(aside_width)),
     ))
     .style(|s| {
         s.width(300)

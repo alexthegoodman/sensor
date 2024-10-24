@@ -7,12 +7,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use bytemuck::Contiguous;
 use common_vector::basic::{
-    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
+    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
-use common_vector::polygon::{Polygon, PolygonConfig};
+use common_vector::polygon::{Polygon, PolygonConfig, Stroke};
 use common_vector::vertex::Vertex;
 use floem::event::{Event, EventListener, EventPropagation};
 use floem::keyboard::{Key, KeyCode, NamedKey};
@@ -83,6 +83,10 @@ pub fn app_view(
         position: Point { x: 0.0, y: 0.0 },
         border_radius: 0.0,
         fill: [0.0, 0.0, 0.0, 1.0],
+        stroke: Stroke {
+            fill: [1.0, 1.0, 1.0, 1.0],
+            thickness: 2.0,
+        },
     });
 
     // Create a RefCell to hold the set_counter function

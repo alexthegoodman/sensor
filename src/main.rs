@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use bytemuck::Contiguous;
 use cgmath::Vector4;
 use common_vector::basic::{
-    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_hex, Point, WindowSize,
+    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::camera::{Camera, CameraBinding};
 use common_vector::dot::draw_dot;
@@ -467,12 +467,6 @@ fn main() {
                 Arc::clone(&editor),
                 Arc::clone(&gpu_helper),
                 Arc::clone(&viewport),
-                // cloned6,
-                // cloned8,
-                // cloned9,
-                // cloned10,
-                // handler,
-                // cloned_square_handler6,
             )
         },
         Some(
@@ -672,45 +666,7 @@ fn main() {
                 window_handle.handle_mouse_wheel =
                     handle_mouse_wheel(cloned11, gpu_resources.clone(), cloned_viewport3.clone());
 
-                let editor_clone = cloned4.clone();
-
-                // test items
-
-                // editor.handle_button_click =
-                //     handle_button_click(editor_clone, gpu_resources.clone(), window_size);
-                // let mut cloned_handler = cloned_handler.lock().unwrap();
-                // cloned_handler.set_button_handler(
-                //     Arc::clone(&gpu_resources),
-                //     viewport.clone(),
-                //     PolygonConfig {
-                //         points: vec![
-                //             Point { x: 0.0, y: 0.0 },
-                //             Point { x: 1.0, y: 0.0 },
-                //             Point { x: 0.5, y: 1.0 },
-                //         ],
-                //         dimensions: (100.0, 100.0),
-                //         position: Point { x: 600.0, y: 100.0 },
-                //         border_radius: 5.0,
-                //     },
-                // );
-
-                // let mut cloned_square_handler = cloned_square_handler.lock().unwrap();
-                // cloned_square_handler.set_button_handler(
-                //     Arc::clone(&gpu_resources),
-                //     viewport.clone(),
-                //     PolygonConfig {
-                //         points: vec![
-                //             Point { x: 0.0, y: 0.0 },
-                //             Point { x: 1.0, y: 0.0 },
-                //             Point { x: 1.0, y: 1.0 },
-                //             Point { x: 0.0, y: 1.0 },
-                //         ],
-                //         dimensions: (100.0, 100.0),
-                //         position: Point { x: 600.0, y: 100.0 },
-                //         border_radius: 5.0,
-                //     },
-                // );
-
+                // *** Test Scene *** //
                 // Create a triangle
                 editor.add_polygon(Polygon::new(
                     &window_size,
