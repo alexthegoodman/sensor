@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::rc::{Rc, Weak};
@@ -52,32 +53,78 @@ use floem::{GpuHelper, View, WindowHandle};
 use floem::unit::{Auto, DurationUnitExt, Pct, UnitExt};
 use std::time::Duration;
 
+use crate::editor_state::EditorState;
+
 pub fn styled_input(
     label_text: String,
     initial_value: &str,
     placeholder: &str,
-    on_event_stop: Box<dyn Fn(String) + 'static>,
+    on_event_stop: Box<dyn Fn(MutexGuard<EditorState>, String) + 'static>,
+    // mut values: HashMap<String, RwSignal<String>>,
+    mut editor_state: Arc<Mutex<EditorState>>,
+    name: String,
 ) -> impl IntoView {
     let value = create_rw_signal(initial_value.to_string());
+
+    let state_2 = Arc::clone(&editor_state);
+
+    create_effect({
+        let name = name.clone();
+        move |_| {
+            // need to value.set in undos defined in properties_panel
+            let mut editor_state = editor_state.lock().unwrap();
+            editor_state.register_signal(name.to_string(), value);
+        }
+    });
 
     v_stack((
         label(move || label_text.clone()).style(|s| s.font_size(10.0).margin_bottom(1.0)),
         text_input(value)
             .on_event_stop(EventListener::KeyUp, move |event: &Event| {
-                if let Event::KeyUp(key) = event {
-                    match key.key.logical_key {
-                        Key::Named(NamedKey::ArrowUp) => {
-                            // Handle up arrow key
-                            println!("Up arrow pressed");
+                if let Event::KeyUp(key_event) = event {
+                    let editor_state = state_2.lock().unwrap();
+
+                    // Handle keyboard shortcuts first
+                    if editor_state.current_modifiers.control_key() {
+                        match key_event.key.logical_key {
+                            Key::Character(ref c) if c.to_lowercase() == "z" => {
+                                // Don't trigger value update for Ctrl+Z
+                                return;
+                            }
+                            Key::Character(ref c) if c.to_lowercase() == "y" => {
+                                // Don't trigger value update for Ctrl+Y
+                                return;
+                            }
+                            _ => {}
                         }
-                        Key::Named(NamedKey::ArrowDown) => {
-                            // Handle down arrow key
-                            println!("Down arrow pressed");
+                    }
+
+                    match key_event.key.logical_key {
+                        // Ignore all control and navigation keys
+                        Key::Named(NamedKey::ArrowUp)
+                        | Key::Named(NamedKey::ArrowDown)
+                        | Key::Named(NamedKey::ArrowLeft)
+                        | Key::Named(NamedKey::ArrowRight)
+                        | Key::Named(NamedKey::Enter)
+                        | Key::Named(NamedKey::Tab)
+                        | Key::Named(NamedKey::Escape)
+                        | Key::Named(NamedKey::Home)
+                        | Key::Named(NamedKey::End)
+                        | Key::Named(NamedKey::PageUp)
+                        | Key::Named(NamedKey::PageDown)
+                        | Key::Named(NamedKey::Control)
+                        | Key::Named(NamedKey::Shift)
+                        | Key::Named(NamedKey::Alt)
+                        | Key::Named(NamedKey::Meta) => {
+                            // Ignore these keys
+                            println!("Ignoring control/navigation key");
+                            return;
                         }
+                        // Only trigger value update for actual content changes
                         _ => {
-                            println!("value {:?}", value.get());
-                            let value = value.get();
-                            on_event_stop(value);
+                            println!("Content change detected: {:?}", key_event.key.logical_key);
+                            let current_value = value.get();
+                            on_event_stop(editor_state, current_value);
                         }
                     }
                 }

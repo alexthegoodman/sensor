@@ -13,11 +13,12 @@ use common_vector::editor::{self, size_to_ndc, visualize_ray_intersection, Edito
 use common_vector::guideline::{create_guide_line_buffers, point_to_ndc};
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
+use editor_state::EditorState;
 use floem::kurbo::Size;
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::dpi::{LogicalSize, PhysicalSize};
-use floem_winit::event::{ElementState, MouseButton, MouseScrollDelta};
+use floem_winit::event::{ElementState, KeyEvent, Modifiers, MouseButton, MouseScrollDelta};
 use uuid::Uuid;
 use views::app::app_view;
 use views::buttons::{nav_button, option_button, small_button};
@@ -27,7 +28,9 @@ use wgpu::util::DeviceExt;
 use floem::context::PaintState;
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
+use undo::{Edit, Record};
 
+mod editor_state;
 mod helpers;
 mod views;
 
@@ -347,6 +350,11 @@ fn handle_window_resize(
         viewport.width = size.width as f32;
         viewport.height = size.height as f32;
 
+        let mut camera = editor.camera.expect("Couldn't get camera on resize");
+
+        camera.window_size.width = size.width;
+        camera.window_size.height = size.height;
+
         editor.update_date_from_window_resize(&window_size, &gpu_resources.device);
 
         gpu_helper
@@ -397,21 +405,61 @@ fn handle_mouse_wheel(
     }))
 }
 
+fn handle_modifiers_changed(
+    // editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_state: std::sync::Arc<Mutex<EditorState>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
+) -> Option<Box<dyn FnMut(Modifiers)>> {
+    Some(Box::new(move |modifiers: Modifiers| {
+        let mut editor_state = editor_state.lock().unwrap();
+        println!("modifiers changed");
+        let modifier_state = modifiers.state();
+        editor_state.current_modifiers = modifier_state;
+    }))
+}
+
+use floem_winit::keyboard::NamedKey;
+use floem_winit::keyboard::{Key, SmolStr};
+
+fn handle_keyboard_input(
+    // editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
+    editor_state: std::sync::Arc<Mutex<EditorState>>,
+    gpu_resources: std::sync::Arc<GpuResources>,
+    viewport: std::sync::Arc<Mutex<Viewport>>,
+) -> Option<Box<dyn FnMut(KeyEvent)>> {
+    Some(Box::new(move |event: KeyEvent| {
+        if event.state != ElementState::Pressed {
+            return;
+        }
+
+        let mut editor_state = editor_state.lock().unwrap();
+        // let editor: MutexGuard<'_, Editor> = editor_state.editor.lock().unwrap();
+        // Check for Ctrl+Z (undo)
+        let modifiers = editor_state.current_modifiers;
+
+        match event.logical_key {
+            Key::Character(c) if c == SmolStr::new("z") => {
+                if modifiers.control_key() {
+                    if modifiers.shift_key() {
+                        editor_state.redo(); // Ctrl+Shift+Z
+                    } else {
+                        println!("undo!");
+                        editor_state.undo(); // Ctrl+Z
+                    }
+                }
+            }
+            Key::Character(c) if c == SmolStr::new("y") => {
+                if modifiers.control_key() {
+                    editor_state.redo(); // Ctrl+Y
+                }
+            }
+            _ => {}
+        }
+    }))
+}
+
 fn main() {
-    // let guard = pprof::ProfilerGuardBuilder::default()
-    //     .frequency(1000)
-    //     .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-    //     .build()
-    //     .unwrap();
-
-    // std::thread::spawn(|| {
-    //     std::thread::sleep(Duration::from_secs(10));
-    //     if let Ok(report) = guard.report().build() {
-    //         let file = File::create("flamegraph.svg").unwrap();
-    //         report.flamegraph(file).unwrap();
-    //     };
-    // });
-
     let app = Application::new();
 
     // Get the primary monitor's size
@@ -436,10 +484,9 @@ fn main() {
     let viewport = Arc::new(Mutex::new(Viewport::new(
         window_size.width as f32,
         window_size.height as f32,
-    ))); // Or whatever your window size is
+    )));
+
     let mut editor = Arc::new(Mutex::new(Editor::new(viewport.clone())));
-    // let mut handler = Arc::new(Mutex::new(Handler::new()));
-    // let mut square_handler = Arc::new(Mutex::new(Handler::new()));
 
     let cloned_viewport = Arc::clone(&viewport);
     let cloned_viewport2 = Arc::clone(&viewport);
@@ -460,10 +507,18 @@ fn main() {
     // let cloned9 = Arc::clone(&editor);
     // let cloned10 = Arc::clone(&editor);
     let cloned11 = Arc::clone(&editor);
+    let cloned12 = Arc::clone(&editor);
+    let cloned13 = Arc::clone(&editor);
+
+    let editor_state = Arc::new(Mutex::new(EditorState::new(cloned4)));
+
+    let state_2 = Arc::clone(&editor_state);
+    let state_3 = Arc::clone(&editor_state);
 
     let (mut app, window_id) = app.window(
         move |_| {
             app_view(
+                Arc::clone(&editor_state),
                 Arc::clone(&editor),
                 Arc::clone(&gpu_helper),
                 Arc::clone(&viewport),
@@ -665,6 +720,13 @@ fn main() {
                 );
                 window_handle.handle_mouse_wheel =
                     handle_mouse_wheel(cloned11, gpu_resources.clone(), cloned_viewport3.clone());
+                window_handle.handle_modifiers_changed = handle_modifiers_changed(
+                    state_3,
+                    gpu_resources.clone(),
+                    cloned_viewport3.clone(),
+                );
+                window_handle.handle_keyboard_input =
+                    handle_keyboard_input(state_2, gpu_resources.clone(), cloned_viewport3.clone());
 
                 // *** Test Scene *** //
                 // Create a triangle

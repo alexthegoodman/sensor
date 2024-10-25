@@ -17,3 +17,4 @@ uuid = { version = "1.8.0", features = ["v4"] }
 strum = "0.26.3"
 strum_macros = "0.26"
 cgmath = "0.18.0"
+undo = "0.51.0"

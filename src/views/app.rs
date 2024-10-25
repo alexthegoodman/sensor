@@ -49,12 +49,14 @@ use floem::{
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
+use crate::editor_state::EditorState;
 use crate::PolygonClickHandler;
 
 use super::aside::tab_interface;
 use super::properties_panel::properties_view;
 
 pub fn app_view(
+    editor_state: Arc<Mutex<EditorState>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     gpu_helper: Arc<Mutex<GpuHelper>>,
     viewport: std::sync::Arc<Mutex<Viewport>>,
@@ -99,12 +101,13 @@ pub fn app_view(
 
     // Create the handle_polygon_click function
     let handle_polygon_click: Arc<PolygonClickHandler> = Arc::new({
+        let editor_state = editor_state.clone();
         // let set_counter_ref = Arc::clone(&set_counter_ref);
         let polygon_selected_ref = Arc::clone(&polygon_selected_ref);
         let selected_polygon_id_ref = Arc::clone(&selected_polygon_id_ref);
         let selected_polygon_data_ref = Arc::clone(&selected_polygon_data_ref);
         move || {
-            let new_editor = editor_cloned2.clone();
+            let editor_state = editor_state.clone();
             // let set_counter_ref = set_counter_ref.clone();
             let polygon_selected_ref = polygon_selected_ref.clone();
             let selected_polygon_id_ref = selected_polygon_id_ref.clone();
@@ -126,6 +129,9 @@ pub fn app_view(
                         selected_polygon_id.update(|c| {
                             *c = polygon_id;
                         });
+                        let mut editor_state = editor_state.lock().unwrap();
+                        editor_state.selected_polygon_id = polygon_id;
+                        editor_state.polygon_selected = true;
                     }
                     if let Ok(mut selected_polygon_data) = selected_polygon_data_ref.lock() {
                         selected_polygon_data.update(|c| {
@@ -167,6 +173,7 @@ pub fn app_view(
             move |polygon_selected_real| {
                 if polygon_selected_real {
                     properties_view(
+                        editor_state.clone(),
                         gpu_helper.clone(),
                         editor_cloned4.clone(),
                         viewport.clone(),
