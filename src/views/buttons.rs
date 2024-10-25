@@ -124,10 +124,20 @@ pub fn success_button(
     )
     .action(action)
     .style(move |s| {
-        s.height(28)
+        s.height(100)
+            .width(100.0)
             .justify_center()
             .align_items(AlignItems::Center)
-            .background(Brush::Gradient(gradient.clone()))
+            .background(
+                Gradient::new_linear(
+                    floem::kurbo::Point::new(0.0, 0.0),
+                    floem::kurbo::Point::new(100.0, 100.0),
+                )
+                .with_stops([
+                    (0.0, Color::rgba(0.2, 0.4, 0.6, 1.0)), // start color
+                    (1.0, Color::rgba(0.4, 0.6, 0.8, 1.0)), // end color
+                ]),
+            )
             .border(0)
             // .border_color(Color::BLACK)
             .border_radius(15)

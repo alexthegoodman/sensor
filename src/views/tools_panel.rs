@@ -169,7 +169,7 @@ pub fn tools_view(
             label(|| "Tools").style(|s| s.font_size(14.0).margin_bottom(15.0)),
             v_stack((
                 mode_picker,
-                // success_button("Export", "windmill", None::<fn()>, false),
+                // success_button("Export", "plus", None::<fn()>, false),
                 container((
                     option_button(
                         "Add Polygon",
