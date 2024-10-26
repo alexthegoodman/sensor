@@ -65,9 +65,7 @@ pub fn properties_view(
     let thirds = (aside_width / 3.0) + (5.0 * 3.0);
     let halfs = (aside_width / 2.0) + (5.0 * 2.0);
 
-    // let mut value_map: HashMap<String, RwSignal<String>> = HashMap::new();
-
-    // println!("Create new value map...");
+    let back_active = RwSignal::new(false);
 
     v_stack((
         h_stack((
@@ -89,7 +87,7 @@ pub fn properties_view(
                         editor_state.polygon_selected = false;
                     }
                 },
-                false,
+                back_active,
             )
             .style(|s| s.margin_right(7.0)),
             label(|| "Properties").style(|s| s.font_size(24.0).font_weight(Weight::THIN)),

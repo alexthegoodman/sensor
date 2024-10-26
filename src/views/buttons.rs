@@ -45,6 +45,8 @@ pub fn create_icon(name: &str) -> String {
         "octagon" => include_str!("../assets/octagon-thin.svg"),
         "square" => include_str!("../assets/square-thin.svg"),
         "triangle" => include_str!("../assets/triangle-thin.svg"),
+        "dot" => include_str!("../assets/dot-outline-thin.svg"),
+        "dots-vertical" => include_str!("../assets/dots-three-outline-vertical-thin.svg"),
         _ => "",
     };
 
@@ -61,22 +63,29 @@ pub fn small_button(
     text: &'static str,
     icon_name: &'static str,
     action: impl FnMut(&Event) + 'static,
-    active: bool,
+    active: RwSignal<bool>,
 ) -> impl IntoView {
     button(
-        v_stack((
+        h_stack((
             svg(create_icon(icon_name)).style(|s| s.width(24).height(24).color(Color::BLACK)),
-            // label(move || text).style(|s| s.margin_top(4.0)),
+            if text.len() > 0 {
+                label(move || text).style(|s| s.margin_left(4.0))
+            } else {
+                label(move || text)
+            },
         ))
         .style(|s| s.justify_center().align_items(AlignItems::Center)),
     )
     .on_click_stop(action)
     .style(move |s| {
-        s.width(28)
-            .height(28)
+        s.height(28)
             .justify_center()
             .align_items(AlignItems::Center)
-            .background(Color::WHITE)
+            .background(if active.get() {
+                Color::LIGHT_GRAY
+            } else {
+                Color::WHITE
+            })
             .border(0)
             // .border_color(Color::BLACK)
             .border_radius(15)

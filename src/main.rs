@@ -189,17 +189,27 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     render_pass.set_bind_group(0, &camera_binding.bind_group, &[]);
 
                     for (poly_index, polygon) in editor.polygons.iter().enumerate() {
-                        // println!("Indices length {:?}", polygon.indices.len());
-                        // println!(
-                        //     "Polygon position {:?} {:?}",
-                        //     polygon.transform.position, polygon.vertices[0]
-                        // );
                         render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
                         render_pass.set_index_buffer(
                             polygon.index_buffer.slice(..),
                             wgpu::IndexFormat::Uint32,
                         );
                         render_pass.draw_indexed(0..polygon.indices.len() as u32, 0, 0..1);
+                    }
+
+                    // for now render just the active brush stroke
+                    if let Some(stroke) = &editor.active_stroke {
+                        // Only render if both buffers are initialized
+                        if let (Some(vertex_buffer), Some(index_buffer)) =
+                            (&stroke.vertex_buffer, &stroke.index_buffer)
+                        {
+                            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                            render_pass.set_index_buffer(
+                                index_buffer.slice(..),
+                                wgpu::IndexFormat::Uint32,
+                            );
+                            render_pass.draw_indexed(0..stroke.indices.len() as u32, 0, 0..1);
+                        }
                     }
 
                     let viewport = editor.viewport.lock().unwrap();

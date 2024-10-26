@@ -11,7 +11,7 @@ use common_vector::basic::{
     color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
-use common_vector::editor::{self, ControlMode, Editor, Viewport};
+use common_vector::editor::{self, ControlMode, Editor, ToolCategory, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig, Stroke};
 use floem::peniko::Color;
@@ -23,6 +23,7 @@ use floem::views::{
     virtual_stack, RadioButton, StackExt, VirtualDirection, VirtualItemSize,
 };
 
+use floem_renderer::gpu_resources;
 use uuid::Uuid;
 // use views::buttons::{nav_button, option_button, small_button};
 // use winit::{event_loop, window};
@@ -45,7 +46,7 @@ use crate::LayersUpdateHandler;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use super::buttons::{layer_button, option_button, sortable_item, success_button};
+use super::buttons::{layer_button, option_button, small_button, sortable_item, success_button};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LayerKind {
@@ -91,11 +92,16 @@ pub fn tools_view(
     let gpu_cloned = Arc::clone(&gpu_helper);
     let viewport_cloned = Arc::clone(&viewport);
 
+    let shape_tab_active = RwSignal::new(true);
+    let brush_tab_active = RwSignal::new(false);
+    let point_mode_active = RwSignal::new(true);
+    let edge_mode_active = RwSignal::new(false);
+    let tool_category = RwSignal::new(ToolCategory::Shape);
     let control_mode = RwSignal::new(ControlMode::Point);
 
-    let mode_picker = ControlMode::iter()
-        .map(move |fm| RadioButton::new_labeled_rw(fm, control_mode, move || fm))
-        .h_stack();
+    // let mode_picker = ControlMode::iter()
+    //     .map(move |fm| RadioButton::new_labeled_rw(fm, control_mode, move || fm))
+    //     .h_stack();
 
     create_effect({
         move |_| {
@@ -163,10 +169,6 @@ pub fn tools_view(
         }
     });
 
-    // let items = [
-    //     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    // ];
-    // let sortable_items = create_rw_signal((0..items.len()).collect::<Vec<usize>>());
     let dragger_id = create_rw_signal(Uuid::nil());
 
     v_stack((
@@ -174,119 +176,242 @@ pub fn tools_view(
         v_stack((
             label(|| "Tools").style(|s| s.font_size(14.0).margin_bottom(15.0)),
             v_stack((
-                mode_picker,
-                // success_button("Export", "plus", None::<fn()>, false),
-                container((
-                    option_button(
-                        "Add Polygon",
+                // mode_picker,
+                h_stack((
+                    small_button(
+                        "Shapes",
                         "triangle",
-                        Some(move || {
-                            let mut editor = editor.lock().unwrap();
-                            // let mut handler = handler.lock().unwrap();
-                            println!("Handle click...");
+                        {
+                            move |_| {
+                                tool_category.set(ToolCategory::Shape);
+                                control_mode.set(ControlMode::Point);
 
-                            // handler.handle_button_click(editor);
+                                shape_tab_active.set(true);
+                                brush_tab_active.set(false);
+                                point_mode_active.set(true);
+                                edge_mode_active.set(false);
+                            }
+                        },
+                        shape_tab_active,
+                    ),
+                    small_button(
+                        "Brushes",
+                        "brush",
+                        {
+                            move |_| {
+                                tool_category.set(ToolCategory::Brush);
+                                control_mode.set(ControlMode::Brush);
 
-                            let polygon_config = PolygonConfig {
-                                id: Uuid::new_v4(),
-                                name: "Polygon".to_string(),
-                                points: vec![
-                                    Point { x: 0.0, y: 0.0 },
-                                    Point { x: 1.0, y: 0.0 },
-                                    Point { x: 0.5, y: 1.0 },
-                                ],
-                                dimensions: (100.0, 100.0),
-                                position: Point { x: 600.0, y: 100.0 },
-                                border_radius: 5.0,
-                                fill: [1.0, 1.0, 1.0, 1.0],
-                                stroke: Stroke {
-                                    fill: [1.0, 1.0, 1.0, 1.0],
-                                    thickness: 2.0,
-                                },
-                            };
-                            let gpu_helper = gpu_helper.lock().unwrap();
-                            let device = &gpu_helper
-                                .gpu_resources
-                                .as_ref()
-                                .expect("Couldn't get gpu resources")
-                                .device;
-                            let viewport = viewport.lock().unwrap();
-                            let window_size = WindowSize {
-                                width: viewport.width as u32,
-                                height: viewport.height as u32,
-                            };
-                            let camera = editor.camera.expect("Couldn't get camera");
-                            editor.add_polygon(Polygon::new(
-                                &window_size,
-                                &device,
-                                &camera,
-                                polygon_config.points.clone(),
-                                polygon_config.dimensions,
-                                polygon_config.position,
-                                polygon_config.border_radius,
-                                polygon_config.fill,
-                                "Polygon".to_string(),
-                            ));
-                        }),
-                        false,
-                    )
-                    .style(|s| s.margin_right(5.0)),
-                    option_button(
-                        "Add Square",
-                        "square",
-                        Some(move || {
-                            let mut editor = editor_cloned.lock().unwrap();
-                            // let mut square_handler = square_handler.lock().unwrap();
-                            println!("Handle square...");
-
-                            // square_handler.handle_button_click(editor_cloned);
-
-                            let polygon_config = PolygonConfig {
-                                id: Uuid::new_v4(),
-                                name: "Square".to_string(),
-                                points: vec![
-                                    Point { x: 0.0, y: 0.0 },
-                                    Point { x: 1.0, y: 0.0 },
-                                    Point { x: 1.0, y: 1.0 },
-                                    Point { x: 0.0, y: 1.0 },
-                                ],
-                                dimensions: (100.0, 100.0),
-                                position: Point { x: 600.0, y: 100.0 },
-                                border_radius: 5.0,
-                                fill: [1.0, 1.0, 1.0, 1.0],
-                                stroke: Stroke {
-                                    fill: [1.0, 1.0, 1.0, 1.0],
-                                    thickness: 2.0,
-                                },
-                            };
-                            let gpu_helper = gpu_cloned.lock().unwrap();
-                            let device = &gpu_helper
-                                .gpu_resources
-                                .as_ref()
-                                .expect("Couldn't get gpu resources")
-                                .device;
-                            let viewport = viewport_cloned.lock().unwrap();
-                            let window_size = WindowSize {
-                                width: viewport.width as u32,
-                                height: viewport.height as u32,
-                            };
-                            let camera = editor.camera.expect("Couldn't get camera");
-                            editor.add_polygon(Polygon::new(
-                                &window_size,
-                                &device,
-                                &camera,
-                                polygon_config.points.clone(),
-                                polygon_config.dimensions,
-                                polygon_config.position,
-                                polygon_config.border_radius,
-                                polygon_config.fill,
-                                "Polygon".to_string(),
-                            ));
-                        }),
-                        false,
+                                shape_tab_active.set(false);
+                                brush_tab_active.set(true);
+                                point_mode_active.set(true);
+                                edge_mode_active.set(false);
+                            }
+                        },
+                        brush_tab_active,
                     ),
                 ))
-                .style(|s| s.flex_wrap(FlexWrap::Wrap).margin_top(5.0)),
+                .style(|s| s.margin_bottom(7.0)),
+                // success_button("Export", "plus", None::<fn()>, false),
+                dyn_container(
+                    move || tool_category.get(),
+                    move |tool_category_real| {
+                        let editor = editor.clone();
+                        let gpu_helper = gpu_helper.clone();
+                        let viewport = viewport.clone();
+
+                        let editor_cloned = editor_cloned.clone();
+                        let gpu_cloned = gpu_cloned.clone();
+                        let viewport_cloned = viewport_cloned.clone();
+
+                        if tool_category_real == ToolCategory::Shape {
+                            v_stack((
+                                h_stack((
+                                    small_button(
+                                        "Points",
+                                        "dot",
+                                        {
+                                            move |_| {
+                                                control_mode.set(ControlMode::Point);
+
+                                                point_mode_active.set(true);
+                                                edge_mode_active.set(false);
+                                            }
+                                        },
+                                        point_mode_active,
+                                    ),
+                                    small_button(
+                                        "Edges",
+                                        "dots-vertical",
+                                        {
+                                            move |_| {
+                                                control_mode.set(ControlMode::Edge);
+
+                                                point_mode_active.set(false);
+                                                edge_mode_active.set(true);
+                                            }
+                                        },
+                                        edge_mode_active,
+                                    ),
+                                ))
+                                .style(|s| s.margin_bottom(7.0)),
+                                container((
+                                    option_button(
+                                        "Add Polygon",
+                                        "triangle",
+                                        Some(move || {
+                                            let mut editor = editor.lock().unwrap();
+                                            // let mut handler = handler.lock().unwrap();
+                                            println!("Handle click...");
+
+                                            // handler.handle_button_click(editor);
+
+                                            let polygon_config = PolygonConfig {
+                                                id: Uuid::new_v4(),
+                                                name: "Polygon".to_string(),
+                                                points: vec![
+                                                    Point { x: 0.0, y: 0.0 },
+                                                    Point { x: 1.0, y: 0.0 },
+                                                    Point { x: 0.5, y: 1.0 },
+                                                ],
+                                                dimensions: (100.0, 100.0),
+                                                position: Point { x: 600.0, y: 100.0 },
+                                                border_radius: 5.0,
+                                                fill: [1.0, 1.0, 1.0, 1.0],
+                                                stroke: Stroke {
+                                                    fill: [1.0, 1.0, 1.0, 1.0],
+                                                    thickness: 2.0,
+                                                },
+                                            };
+                                            let gpu_helper = gpu_helper.lock().unwrap();
+                                            let device = &gpu_helper
+                                                .gpu_resources
+                                                .as_ref()
+                                                .expect("Couldn't get gpu resources")
+                                                .device;
+                                            let viewport = viewport.lock().unwrap();
+                                            let window_size = WindowSize {
+                                                width: viewport.width as u32,
+                                                height: viewport.height as u32,
+                                            };
+                                            let camera =
+                                                editor.camera.expect("Couldn't get camera");
+                                            editor.add_polygon(Polygon::new(
+                                                &window_size,
+                                                &device,
+                                                &camera,
+                                                polygon_config.points.clone(),
+                                                polygon_config.dimensions,
+                                                polygon_config.position,
+                                                polygon_config.border_radius,
+                                                polygon_config.fill,
+                                                "Polygon".to_string(),
+                                            ));
+                                        }),
+                                        false,
+                                    )
+                                    .style(|s| s.margin_right(5.0)),
+                                    option_button(
+                                        "Add Square",
+                                        "square",
+                                        Some(move || {
+                                            let mut editor = editor_cloned.lock().unwrap();
+                                            // let mut square_handler = square_handler.lock().unwrap();
+                                            println!("Handle square...");
+
+                                            // square_handler.handle_button_click(editor_cloned);
+
+                                            let polygon_config = PolygonConfig {
+                                                id: Uuid::new_v4(),
+                                                name: "Square".to_string(),
+                                                points: vec![
+                                                    Point { x: 0.0, y: 0.0 },
+                                                    Point { x: 1.0, y: 0.0 },
+                                                    Point { x: 1.0, y: 1.0 },
+                                                    Point { x: 0.0, y: 1.0 },
+                                                ],
+                                                dimensions: (100.0, 100.0),
+                                                position: Point { x: 600.0, y: 100.0 },
+                                                border_radius: 5.0,
+                                                fill: [1.0, 1.0, 1.0, 1.0],
+                                                stroke: Stroke {
+                                                    fill: [1.0, 1.0, 1.0, 1.0],
+                                                    thickness: 2.0,
+                                                },
+                                            };
+                                            let gpu_helper = gpu_cloned.lock().unwrap();
+                                            let device = &gpu_helper
+                                                .gpu_resources
+                                                .as_ref()
+                                                .expect("Couldn't get gpu resources")
+                                                .device;
+                                            let viewport = viewport_cloned.lock().unwrap();
+                                            let window_size = WindowSize {
+                                                width: viewport.width as u32,
+                                                height: viewport.height as u32,
+                                            };
+                                            let camera =
+                                                editor.camera.expect("Couldn't get camera");
+                                            editor.add_polygon(Polygon::new(
+                                                &window_size,
+                                                &device,
+                                                &camera,
+                                                polygon_config.points.clone(),
+                                                polygon_config.dimensions,
+                                                polygon_config.position,
+                                                polygon_config.border_radius,
+                                                polygon_config.fill,
+                                                "Polygon".to_string(),
+                                            ));
+                                        }),
+                                        false,
+                                    ),
+                                ))
+                                .style(|s| s.flex_wrap(FlexWrap::Wrap).margin_top(5.0)),
+                            ))
+                            .into_any()
+                        } else if tool_category_real == ToolCategory::Brush {
+                            container((
+                                option_button(
+                                    "Use Solid",
+                                    "brush",
+                                    Some(move || {
+                                        // let mut editor = editor.lock().unwrap();
+                                        // let mut handler = handler.lock().unwrap();
+                                        println!("Handle Solid...");
+                                    }),
+                                    false,
+                                )
+                                .style(|s| s.margin_right(5.0)),
+                                option_button(
+                                    "Use Calligraphy",
+                                    "brush",
+                                    Some(move || {
+                                        // let mut editor = editor.lock().unwrap();
+                                        // let mut handler = handler.lock().unwrap();
+                                        println!("Handle Calligraphy...");
+                                    }),
+                                    false,
+                                )
+                                .style(|s| s.margin_right(5.0)),
+                                option_button(
+                                    "Use Airbrush",
+                                    "brush",
+                                    Some(move || {
+                                        // let mut editor = editor_cloned.lock().unwrap();
+                                        // let mut square_handler = square_handler.lock().unwrap();
+                                        println!("Handle Airbrush...");
+                                    }),
+                                    false,
+                                ),
+                            ))
+                            .style(|s| s.flex_wrap(FlexWrap::Wrap).margin_top(5.0))
+                            .into_any()
+                        } else {
+                            empty().into_any()
+                        }
+                    },
+                ),
             )),
         ))
         .style(|s| {

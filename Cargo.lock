@@ -448,7 +448,6 @@ dependencies = [
  "pollster",
  "strum",
  "strum_macros",
- "undo",
  "uuid",
  "wgpu",
  "winit",
