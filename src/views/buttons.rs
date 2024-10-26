@@ -247,6 +247,7 @@ use floem::reactive::SignalUpdate;
 use super::tools_panel::Layer;
 
 pub fn sortable_item(
+    editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     sortable_items: RwSignal<Vec<Layer>>,
     dragger_id: RwSignal<Uuid>,
     item_id: Uuid,
@@ -271,6 +272,7 @@ pub fn sortable_item(
         floem::event::EventPropagation::Continue
     })
     .on_event(floem::event::EventListener::DragOver, move |_| {
+        let mut editor = editor.lock().unwrap();
         let dragger_id = dragger_id.get_untracked();
         if dragger_id != item_id {
             let dragger_pos = sortable_items
@@ -289,12 +291,14 @@ pub fn sortable_item(
             sortable_items.update(|items| {
                 if (dragger_pos <= items.len() && hover_pos <= items.len()) {
                     let item = items.get(dragger_pos).cloned();
-                    println!("remove item");
                     items.remove(dragger_pos);
+                    editor.layer_list.remove(dragger_pos);
 
                     if let Some(selected_item) = item {
-                        println!("insert item");
                         items.insert(hover_pos, selected_item.clone());
+                        editor
+                            .layer_list
+                            .insert(hover_pos, selected_item.instance_id);
                     }
                 }
             });

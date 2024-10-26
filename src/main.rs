@@ -53,7 +53,7 @@ mod views;
 // }
 
 pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
-pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(Vec<PolygonConfig>)>>;
+pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(PolygonConfig)>>;
 
 use std::ops::Not;
 

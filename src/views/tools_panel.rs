@@ -13,7 +13,7 @@ use common_vector::basic::{
 use common_vector::dot::draw_dot;
 use common_vector::editor::{self, ControlMode, Editor, ToolCategory, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
-use common_vector::polygon::{Polygon, PolygonConfig, Stroke};
+use common_vector::polygon::{self, Polygon, PolygonConfig, Stroke};
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
@@ -89,6 +89,8 @@ pub fn tools_view(
     let editor_cloned2 = Arc::clone(&editor);
     let editor_cloned3 = Arc::clone(&editor);
     let editor_cloned4 = Arc::clone(&editor);
+    let editor_cloned5 = Arc::clone(&editor);
+    let editor_cloned6 = Arc::clone(&editor);
     let gpu_cloned = Arc::clone(&gpu_helper);
     let viewport_cloned = Arc::clone(&viewport);
 
@@ -122,7 +124,7 @@ pub fn tools_view(
         }
     });
 
-    // Create the handle_polygon_click function
+    // Update ui list when layers list is updated
     let handle_layers_update: Arc<LayersUpdateHandler> = Arc::new({
         // let set_counter_ref = Arc::clone(&set_counter_ref);
         let layers_ref = Arc::clone(&layers_ref);
@@ -130,7 +132,7 @@ pub fn tools_view(
             let new_editor = editor_cloned2.clone();
             // let set_counter_ref = set_counter_ref.clone();
             let layers_ref = layers_ref.clone();
-            Some(Box::new(move |polygons_data: Vec<PolygonConfig>| {
+            Some(Box::new(move |polygon_data: PolygonConfig| {
                 // cannot lock editor here!
                 // {
                 //     let mut editor = new_editor.lock().unwrap();
@@ -141,20 +143,17 @@ pub fn tools_view(
                     // layers.update(|c| {
                     //     *c = true;
                     // });
-                    let new_layers: Vec<Layer> = polygons_data
-                        .iter()
-                        .map(Layer::from_polygon_config)
-                        .collect();
+                    let new_layer: Layer = Layer::from_polygon_config(&polygon_data);
 
-                    if (new_layers.len() > 0) {
-                        // println!("Layers change {:?}", new_layers.len());
-                        // layers.set(new_layers);
-                        // layers.update(|c| c.push(new_layers[0].clone()));
-                        layers.update(|l| *l = new_layers);
-                        // ui_update_trigger.update(|count| *count += 1);
-                    }
+                    // if (new_layers.len() > 0) {
+                    // println!("Layers change {:?}", new_layers.len());
+                    // layers.set(new_layers);
+                    // layers.update(|c| c.push(new_layers[0].clone()));
+                    layers.update(|l| l.push(new_layer));
+                    // ui_update_trigger.update(|count| *count += 1);
+                    // }
                 }
-            }) as Box<dyn FnMut(Vec<PolygonConfig>)>)
+            }) as Box<dyn FnMut(PolygonConfig)>)
         }
     });
 
@@ -165,7 +164,30 @@ pub fn tools_view(
         move |_| {
             let mut editor = editor_cloned3.lock().unwrap();
             editor.handle_layers_update = Some(Arc::clone(&handle_layers_update));
-            editor.run_layers_update();
+            // editor.run_layers_update(); // not good here
+        }
+    });
+
+    // if polygons are already set, reset layer list upon remount
+    create_effect({
+        let editor_cloned5 = Arc::clone(&editor_cloned5);
+
+        move |_| {
+            let mut editor = editor_cloned5.lock().unwrap();
+
+            editor.layer_list.iter().for_each(|layer_id| {
+                let polygon = editor
+                    .polygons
+                    .iter()
+                    .find(|polygon| polygon.id == *layer_id)
+                    .expect("Couldn't find polygon for layer");
+
+                let polygon_config: PolygonConfig = polygon.to_config();
+
+                let new_layer: Layer = Layer::from_polygon_config(&polygon_config);
+
+                layers.update(|l| l.push(new_layer));
+            });
         }
     });
 
@@ -456,6 +478,7 @@ pub fn tools_view(
                     move || layers.get(),
                     |layer: &Layer| layer.instance_id,
                     move |layer| {
+                        let editor = editor_cloned6.clone();
                         let icon_name = match layer.instance_kind {
                             LayerKind::Polygon => "triangle",
                             // LayerKind::Path =>
@@ -464,6 +487,7 @@ pub fn tools_view(
                             //         // LayerKind::Group =>
                         };
                         sortable_item(
+                            editor,
                             layers,
                             dragger_id,
                             layer.instance_id,
