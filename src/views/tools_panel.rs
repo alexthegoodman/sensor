@@ -45,7 +45,7 @@ use crate::LayersUpdateHandler;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use super::buttons::{layer_button, option_button, success_button};
+use super::buttons::{layer_button, option_button, sortable_item, success_button};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LayerKind {
@@ -162,6 +162,12 @@ pub fn tools_view(
             editor.run_layers_update();
         }
     });
+
+    // let items = [
+    //     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    // ];
+    // let sortable_items = create_rw_signal((0..items.len()).collect::<Vec<usize>>());
+    let dragger_id = create_rw_signal(Uuid::nil());
 
     v_stack((
         // label(move || format!("Tools")).style(|s| s.margin_bottom(10)),
@@ -303,10 +309,28 @@ pub fn tools_view(
         v_stack((
             label(|| "Scene").style(|s| s.font_size(14.0).margin_bottom(15.0)),
             scroll(
+                // dyn_stack(
+                //     move || layers.get(),
+                //     |layer| layer.instance_id, // Assuming each layer has a unique id
+                //     |layer| {
+                //         let icon_name = match layer.instance_kind {
+                //             LayerKind::Polygon => "triangle",
+                //             // LayerKind::Path =>
+                //             //         // LayerKind::Imag(data) =>
+                //             //         // LayerKind::Text =>
+                //             //         // LayerKind::Group =>
+                //         };
+                //         layer_button(layer.instance_name.clone(), &icon_name)
+                //     },
+                // )
+                // .style(|s| {
+                //     s.display(TaffyDisplay::Flex)
+                //         .flex_direction(FlexDirection::Column)
+                // }),
                 dyn_stack(
                     move || layers.get(),
-                    |layer| layer.instance_id, // Assuming each layer has a unique id
-                    |layer| {
+                    |layer: &Layer| layer.instance_id,
+                    move |layer| {
                         let icon_name = match layer.instance_kind {
                             LayerKind::Polygon => "triangle",
                             // LayerKind::Path =>
@@ -314,13 +338,17 @@ pub fn tools_view(
                             //         // LayerKind::Text =>
                             //         // LayerKind::Group =>
                         };
-                        layer_button(layer.instance_name.clone(), &icon_name)
+                        sortable_item(
+                            layers,
+                            dragger_id,
+                            layer.instance_id,
+                            layer.instance_name.clone(),
+                            icon_name,
+                        )
                     },
                 )
-                .style(|s| {
-                    s.display(TaffyDisplay::Flex)
-                        .flex_direction(FlexDirection::Column)
-                }),
+                .style(|s: floem::style::Style| s.flex_col().column_gap(5).padding(10))
+                .into_view(),
             )
             .style(move |s| s.height(window_height.get() / 2.0 - 190.0)),
         ))

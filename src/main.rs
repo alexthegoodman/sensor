@@ -384,8 +384,8 @@ fn handle_mouse_wheel(
         // viewport.width = size.width as f32;
         // viewport.height = size.height as f32;
         let mouse_pos = Point {
-            x: editor.ds_ndc_pos.x,
-            y: editor.ds_ndc_pos.y,
+            x: editor.global_top_left.x,
+            y: editor.global_top_left.y,
         };
 
         match delta {
