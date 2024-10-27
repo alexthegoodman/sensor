@@ -13,7 +13,7 @@ use common_vector::editor::{self, size_to_ndc, visualize_ray_intersection, Edito
 use common_vector::guideline::{create_guide_line_buffers, point_to_ndc};
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
-use editor_state::EditorState;
+use editor_state::{EditorState, PolygonEdit, RecordState};
 use floem::kurbo::Size;
 use floem::window::WindowConfig;
 use floem_renderer::gpu_resources::{self, GpuResources};
@@ -309,17 +309,21 @@ fn handle_cursor_moved(
                 positionX as f32,
                 positionY as f32,
             );
+            // TODO: need callback for when cursor is done moving, then add translation to undo stack
         },
     ))
 }
 
 fn handle_mouse_input(
+    mut editor_state: Arc<Mutex<EditorState>>,
     editor: std::sync::Arc<Mutex<common_vector::editor::Editor>>,
     gpu_resources: std::sync::Arc<GpuResources>,
     // window_size: WindowSize,
     viewport: std::sync::Arc<Mutex<Viewport>>,
+    record: Arc<Mutex<Record<PolygonEdit>>>,
 ) -> Option<Box<dyn Fn(MouseButton, ElementState)>> {
     Some(Box::new(move |button, state| {
+        let mut editor_orig = Arc::clone(&editor);
         let mut editor = editor.lock().unwrap();
         let viewport = viewport.lock().unwrap();
         let window_size = WindowSize {
@@ -327,7 +331,7 @@ fn handle_mouse_input(
             height: viewport.height as u32,
         };
         if button == MouseButton::Left {
-            match state {
+            let edit_config = match state {
                 ElementState::Pressed => editor.handle_mouse_down(
                     // mouse_position.0,
                     // mouse_position.1,
@@ -335,6 +339,30 @@ fn handle_mouse_input(
                     &gpu_resources.device,
                 ),
                 ElementState::Released => editor.handle_mouse_up(),
+            };
+
+            drop(editor);
+
+            if (edit_config.is_some()) {
+                let edit_config = edit_config.expect("Couldn't get polygon edit config");
+
+                let mut editor_state = editor_state.lock().unwrap();
+
+                let edit = PolygonEdit {
+                    polygon_id: edit_config.polygon_id,
+                    old_value: edit_config.old_value,
+                    new_value: edit_config.new_value,
+                    field_name: edit_config.field_name,
+                    signal: None,
+                };
+
+                let mut record_state = RecordState {
+                    editor: editor_orig,
+                    // record: Arc::clone(&record),
+                };
+
+                let mut record = record.lock().unwrap();
+                record.edit(&mut record_state, edit);
             }
         }
     }))
@@ -520,10 +548,15 @@ fn main() {
     let cloned12 = Arc::clone(&editor);
     let cloned13 = Arc::clone(&editor);
 
-    let editor_state = Arc::new(Mutex::new(EditorState::new(cloned4)));
+    let record = Arc::new(Mutex::new(Record::new()));
+
+    let record_2 = Arc::clone(&record);
+
+    let editor_state = Arc::new(Mutex::new(EditorState::new(cloned4, record)));
 
     let state_2 = Arc::clone(&editor_state);
     let state_3 = Arc::clone(&editor_state);
+    let state_4 = Arc::clone(&editor_state);
 
     let (mut app, window_id) = app.window(
         move |_| {
@@ -718,9 +751,11 @@ fn main() {
                     cloned_viewport.clone(),
                 );
                 window_handle.handle_mouse_input = handle_mouse_input(
+                    state_4.clone(),
                     cloned3.clone(),
                     gpu_resources.clone(),
                     cloned_viewport2.clone(),
+                    record_2.clone(),
                 );
                 window_handle.handle_window_resized = handle_window_resize(
                     cloned7,
