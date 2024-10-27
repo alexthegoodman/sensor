@@ -1,19 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
-use std::fs;
-use std::path::Path;
-use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use bytemuck::Contiguous;
-use common_vector::basic::{
-    color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
-};
-use common_vector::dot::draw_dot;
 use common_vector::editor::{self, Editor, Viewport};
-use common_vector::guideline::create_guide_line_buffers;
-use common_vector::polygon::{Polygon, PolygonConfig};
-use common_vector::vertex::Vertex;
+use floem::common::nav_button;
 use floem::event::{Event, EventListener, EventPropagation};
 use floem::keyboard::{Key, KeyCode, NamedKey};
 use floem::kurbo::Size;
@@ -50,7 +38,6 @@ use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
 use super::assets_panel::assets_view;
-use super::buttons::nav_button;
 use super::settings_panel::settings_view;
 use super::tools_panel::tools_view;
 

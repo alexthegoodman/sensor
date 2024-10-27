@@ -15,6 +15,7 @@ use common_vector::editor::{self, Editor, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig};
 use common_vector::vertex::Vertex;
+use floem::common::input_styles;
 use floem::event::{Event, EventListener, EventPropagation};
 use floem::keyboard::{Key, KeyCode, NamedKey};
 use floem::kurbo::Size;
@@ -130,14 +131,7 @@ pub fn styled_input(
                 }
             })
             .placeholder(placeholder)
-            .style(|s| {
-                s.width_full()
-                    .border(1)
-                    .border_color(Color::GRAY)
-                    .border_radius(4)
-                    .padding_horiz(5)
-                    .padding_vert(3)
-            }),
+            .style(|s| input_styles(s)),
     ))
     .style(|s| s.margin_bottom(10))
 }

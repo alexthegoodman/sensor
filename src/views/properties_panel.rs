@@ -1,3 +1,4 @@
+use floem::common::small_button;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use uuid::Uuid;
@@ -20,7 +21,6 @@ use floem::IntoView;
 
 use crate::editor_state::{self, EditorState};
 
-use super::buttons::small_button;
 use super::inputs::styled_input;
 
 pub fn properties_view(

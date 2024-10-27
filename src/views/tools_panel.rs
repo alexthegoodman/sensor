@@ -14,6 +14,7 @@ use common_vector::dot::draw_dot;
 use common_vector::editor::{self, ControlMode, Editor, ToolCategory, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{self, Polygon, PolygonConfig, Stroke};
+use floem::common::{option_button, small_button};
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
@@ -46,7 +47,7 @@ use crate::LayersUpdateHandler;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use super::buttons::{layer_button, option_button, small_button, sortable_item, success_button};
+use super::buttons::sortable_item;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LayerKind {
