@@ -198,7 +198,7 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     }
 
                     // for now render just the active brush stroke
-                    if let Some(stroke) = &editor.active_stroke {
+                    for (stroke_index, stroke) in editor.brush_strokes.iter().enumerate() {
                         // Only render if both buffers are initialized
                         if let (Some(vertex_buffer), Some(index_buffer)) =
                             (&stroke.vertex_buffer, &stroke.index_buffer)
