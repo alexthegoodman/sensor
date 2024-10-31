@@ -1,3 +1,4 @@
+use floem::common::card_styles;
 use floem::common::small_button;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -273,17 +274,9 @@ pub fn properties_view(
         ))
         .style(move |s| s.width(aside_width)),
     ))
+    .style(|s| card_styles(s))
     .style(|s| {
         s.width(300)
-            .padding(20)
-            .background(Color::rgba(240.0, 240.0, 240.0, 255.0))
-            .border_radius(15)
-            .box_shadow_blur(15)
-            .box_shadow_spread(4)
-            .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
-    })
-    .style(|s| {
-        s
             // .absolute()
             .height(800.0)
             .margin_left(0.0)

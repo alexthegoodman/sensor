@@ -11,10 +11,12 @@ use common_vector::basic::{
     color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
-use common_vector::editor::{self, ControlMode, Editor, ToolCategory, Viewport};
+use common_vector::editor::{
+    self, ControlMode, Editor, LayersUpdateHandler, ToolCategory, Viewport,
+};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{self, Polygon, PolygonConfig, Stroke};
-use floem::common::{option_button, small_button};
+use floem::common::{card_styles, option_button, small_button};
 use floem::peniko::Color;
 use floem::reactive::{create_effect, create_rw_signal, create_signal, RwSignal, SignalRead};
 use floem::style::{Background, CursorStyle, Transition};
@@ -43,7 +45,6 @@ use floem::{
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
-use crate::LayersUpdateHandler;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -154,7 +155,7 @@ pub fn tools_view(
                     // ui_update_trigger.update(|count| *count += 1);
                     // }
                 }
-            }) as Box<dyn FnMut(PolygonConfig)>)
+            }) as Box<dyn FnMut(PolygonConfig) + Send>)
         }
     });
 
@@ -437,17 +438,9 @@ pub fn tools_view(
                 ),
             )),
         ))
-        .style(|s| {
-            s.width(300)
-                .padding(20)
-                .background(Color::rgba(240.0, 240.0, 240.0, 255.0))
-                .border_radius(15)
-                .box_shadow_blur(15)
-                .box_shadow_spread(4)
-                .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
-        })
+        .style(|s| card_styles(s))
         .style(move |s| {
-            s
+            s.width(300)
                 // .absolute()
                 .height(window_height.get() / 2.0 - 120.0)
                 .margin_left(0.0)
@@ -502,17 +495,9 @@ pub fn tools_view(
             )
             .style(move |s| s.height(window_height.get() / 2.0 - 190.0)),
         ))
-        .style(|s| {
-            s.width(300)
-                .padding(20)
-                .background(Color::rgba(240.0, 240.0, 240.0, 255.0))
-                .border_radius(15)
-                .box_shadow_blur(15)
-                .box_shadow_spread(4)
-                .box_shadow_color(Color::rgba(0.0, 0.0, 0.0, 0.36))
-        })
+        .style(|s| card_styles(s))
         .style(move |s| {
-            s
+            s.width(300)
                 // .absolute()
                 .height(window_height.get() / 2.0 - 120.0)
                 .margin_left(0.0)

@@ -871,7 +871,6 @@ version = "0.1.1"
 dependencies = [
  "bitflags 2.6.0",
  "clipboard-win",
- "common-vector",
  "copypasta",
  "crossbeam",
  "crossbeam-channel",
@@ -1031,6 +1030,7 @@ dependencies = [
  "peniko",
  "raw-window-handle 0.6.2",
  "resvg",
+ "sha2",
  "swash",
  "wgpu",
 ]

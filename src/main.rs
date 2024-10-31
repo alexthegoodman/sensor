@@ -52,8 +52,8 @@ mod views;
 //     }
 // }
 
-pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
-pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(PolygonConfig)>>;
+// pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
+// pub type LayersUpdateHandler = dyn Fn() -> Option<Box<dyn FnMut(PolygonConfig)>>;
 
 use std::ops::Not;
 
@@ -94,6 +94,15 @@ pub fn render_ray_intersection(
     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
     render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
     // }
+}
+
+pub fn get_sensor_editor(handle: &WindowHandle) -> Option<Arc<Mutex<Editor>>> {
+    handle.user_editor.as_ref().and_then(|e| {
+        // let guard = e.lock().ok()?;
+        let cloned = e.downcast_ref::<Arc<Mutex<Editor>>>().cloned();
+        // drop(guard);
+        cloned
+    })
 }
 
 type RenderCallback<'a> = dyn for<'b> Fn(
@@ -171,10 +180,16 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                             .expect("Couldn't fetch render pipeline"),
                     );
 
-                    let editor = handle
-                        .user_editor
+                    // let editor = handle
+                    //     .user_editor
+                    //     .as_ref()
+                    //     .expect("Couldn't get user editor")
+                    //     .lock()
+                    //     .unwrap();
+                    let editor = get_sensor_editor(handle);
+                    let editor = editor
                         .as_ref()
-                        .expect("Couldn't get user editor")
+                        .expect("Couldn't get user engine")
                         .lock()
                         .unwrap();
 
@@ -398,7 +413,7 @@ fn handle_window_resize(
         gpu_helper
             .lock()
             .unwrap()
-            .recreate_depth_view(&gpu_resources, &window_size);
+            .recreate_depth_view(&gpu_resources, size.width, size.height);
     }))
 }
 
@@ -591,11 +606,13 @@ fn main() {
 
         // window_handle.set_render_callback(render_callback);
         window_handle.set_encode_callback(render_callback);
-        window_handle.window_size = Some(window_size);
+        // window_handle.window_size = Some(window_size);
+        window_handle.window_width = Some(window_size.width);
+        window_handle.window_height = Some(window_size.height);
 
         println!("Ready...");
 
-        window_handle.user_editor = Some(cloned);
+        window_handle.user_editor = Some(Box::new(cloned));
 
         // Receive and store GPU resources
         match &mut window_handle.paint_state {
@@ -624,10 +641,11 @@ fn main() {
                         ..Default::default()
                     });
 
-                gpu_cloned
-                    .lock()
-                    .unwrap()
-                    .recreate_depth_view(&gpu_resources, &window_size);
+                gpu_cloned.lock().unwrap().recreate_depth_view(
+                    &gpu_resources,
+                    window_size.width,
+                    window_size.height,
+                );
 
                 let depth_stencil_state = wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth24Plus,

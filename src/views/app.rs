@@ -10,7 +10,7 @@ use common_vector::basic::{
     color_to_wgpu, rgb_to_wgpu, string_to_f32, wgpu_to_human, Point, WindowSize,
 };
 use common_vector::dot::draw_dot;
-use common_vector::editor::{self, Editor, Viewport};
+use common_vector::editor::{self, Editor, PolygonClickHandler, Viewport};
 use common_vector::guideline::create_guide_line_buffers;
 use common_vector::polygon::{Polygon, PolygonConfig, Stroke};
 use common_vector::vertex::Vertex;
@@ -50,7 +50,6 @@ use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 
 use crate::editor_state::EditorState;
-use crate::PolygonClickHandler;
 
 use super::aside::tab_interface;
 use super::properties_panel::properties_view;
@@ -138,7 +137,7 @@ pub fn app_view(
                             *c = polygon_data;
                         });
                     }
-                }) as Box<dyn FnMut(Uuid, PolygonConfig)>,
+                }) as Box<dyn FnMut(Uuid, PolygonConfig) + Send>,
             )
         }
     });
