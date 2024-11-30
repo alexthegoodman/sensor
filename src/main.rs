@@ -26,6 +26,7 @@ use views::app::app_view;
 use wgpu::util::DeviceExt;
 
 use floem::context::PaintState;
+use floem::EngineHandle;
 use floem::{Application, CustomRenderCallback};
 use floem::{GpuHelper, View, WindowHandle};
 use undo::{Edit, Record};
@@ -96,7 +97,7 @@ pub fn render_ray_intersection(
     // }
 }
 
-pub fn get_sensor_editor(handle: &WindowHandle) -> Option<Arc<Mutex<Editor>>> {
+pub fn get_sensor_editor(handle: &EngineHandle) -> Option<Arc<Mutex<Editor>>> {
     handle.user_editor.as_ref().and_then(|e| {
         // let guard = e.lock().ok()?;
         let cloned = e.downcast_ref::<Arc<Mutex<Editor>>>().cloned();
@@ -105,139 +106,179 @@ pub fn get_sensor_editor(handle: &WindowHandle) -> Option<Arc<Mutex<Editor>>> {
     })
 }
 
+// type RenderCallback<'a> = dyn for<'b> Fn(
+//         wgpu::CommandEncoder,
+//         wgpu::SurfaceTexture,
+//         wgpu::TextureView,
+//         wgpu::TextureView,
+//         &WindowHandle,
+//     ) + 'a;
 type RenderCallback<'a> = dyn for<'b> Fn(
         wgpu::CommandEncoder,
         wgpu::SurfaceTexture,
-        wgpu::TextureView,
-        wgpu::TextureView,
-        &WindowHandle,
+        Arc<wgpu::TextureView>,
+        Arc<wgpu::TextureView>,
+        // &WindowHandle,
+        &Arc<GpuResources>,
+        &EngineHandle,
+    ) -> (
+        Option<wgpu::CommandEncoder>,
+        Option<wgpu::SurfaceTexture>,
+        Option<Arc<wgpu::TextureView>>,
+        Option<Arc<wgpu::TextureView>>,
     ) + 'a;
 
 fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
     Box::new(
         move |mut encoder: wgpu::CommandEncoder,
               frame: wgpu::SurfaceTexture,
-              view: wgpu::TextureView,
-              resolve_view: wgpu::TextureView,
-              window_handle: &WindowHandle| {
-            let mut handle = window_handle.borrow();
+              view: Arc<wgpu::TextureView>,
+              resolve_view: Arc<wgpu::TextureView>,
+              //   window_handle: &WindowHandle
+              gpu_resources: &Arc<GpuResources>,
+              engine_handle: &EngineHandle| {
+            // let mut handle = window_handle.borrow();
+            let mut editor = get_sensor_editor(engine_handle);
+            // let mut engine = editor
+            //     .as_mut()
+            //     .expect("Couldn't get user engine")
+            //     .lock()
+            //     .unwrap();
 
-            if let Some(gpu_resources) = &handle.gpu_resources {
-                {
-                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: None,
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: Some(&resolve_view),
-                            ops: wgpu::Operations {
-                                // load: wgpu::LoadOp::Clear(wgpu::Color {
-                                //     // grey background
-                                //     r: 0.15,
-                                //     g: 0.15,
-                                //     b: 0.15,
-                                //     // white background
-                                //     // r: 1.0,
-                                //     // g: 1.0,
-                                //     // b: 1.0,
-                                //     a: 1.0,
-                                // }),
-                                // load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        // depth_stencil_attachment: None,
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: &handle
-                                .gpu_helper
-                                .as_ref()
-                                .expect("Couldn't get gpu helper")
-                                .lock()
-                                .unwrap()
-                                .depth_view
-                                .as_ref()
-                                .expect("Couldn't fetch depth view"), // This is the depth texture view
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(1.0), // Clear to max depth
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None, // Set this if using stencil
-                        }),
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    });
-
-                    // println!("Render frame...");
-
-                    // Render partial screen content
-                    // render_pass.set_viewport(100.0, 100.0, 200.0, 200.0, 0.0, 1.0);
-                    // render_pass.set_scissor_rect(100, 100, 200, 200);
-
-                    render_pass.set_pipeline(
-                        &handle
-                            .render_pipeline
+            // if let Some(gpu_resources) = &handle.gpu_resources {
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: Some(&resolve_view),
+                        ops: wgpu::Operations {
+                            // load: wgpu::LoadOp::Clear(wgpu::Color {
+                            //     // grey background
+                            //     r: 0.15,
+                            //     g: 0.15,
+                            //     b: 0.15,
+                            //     // white background
+                            //     // r: 1.0,
+                            //     // g: 1.0,
+                            //     // b: 1.0,
+                            //     a: 1.0,
+                            // }),
+                            // load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            // load: wgpu::LoadOp::Load,
+                            // store: wgpu::StoreOp::Store,
+                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    // depth_stencil_attachment: None,
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &engine_handle
+                            .gpu_helper
                             .as_ref()
-                            .expect("Couldn't fetch render pipeline"),
+                            .expect("Couldn't get gpu helper")
+                            .lock()
+                            .unwrap()
+                            .depth_view
+                            .as_ref()
+                            .expect("Couldn't fetch depth view"), // This is the depth texture view
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0), // Clear to max depth
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None, // Set this if using stencil
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+                // println!("Render frame...");
+
+                // Render partial screen content
+                // render_pass.set_viewport(100.0, 100.0, 200.0, 200.0, 0.0, 1.0);
+                // render_pass.set_scissor_rect(100, 100, 200, 200);
+
+                render_pass.set_pipeline(
+                    &engine_handle
+                        .render_pipeline
+                        .as_ref()
+                        .expect("Couldn't fetch render pipeline"),
+                );
+
+                // let editor = handle
+                //     .user_editor
+                //     .as_ref()
+                //     .expect("Couldn't get user editor")
+                //     .lock()
+                //     .unwrap();
+                let editor = get_sensor_editor(engine_handle);
+                // does this freeze?
+                let editor = editor
+                    .as_ref()
+                    .expect("Couldn't get user engine")
+                    .lock()
+                    .unwrap();
+
+                let camera_binding = editor
+                    .camera_binding
+                    .as_ref()
+                    .expect("Couldn't get camera binding");
+
+                // camera_binding.update(&gpu_resources.queue, &editor.camera);
+                // editor.update_camera_binding(&gpu_resources.queue);
+
+                render_pass.set_bind_group(0, &camera_binding.bind_group, &[]);
+
+                for (poly_index, polygon) in editor.polygons.iter().enumerate() {
+                    render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        polygon.index_buffer.slice(..),
+                        wgpu::IndexFormat::Uint32,
                     );
+                    render_pass.draw_indexed(0..polygon.indices.len() as u32, 0, 0..1);
+                }
 
-                    // let editor = handle
-                    //     .user_editor
-                    //     .as_ref()
-                    //     .expect("Couldn't get user editor")
-                    //     .lock()
-                    //     .unwrap();
-                    let editor = get_sensor_editor(handle);
-                    let editor = editor
-                        .as_ref()
-                        .expect("Couldn't get user engine")
-                        .lock()
-                        .unwrap();
-
-                    let camera_binding = editor
-                        .camera_binding
-                        .as_ref()
-                        .expect("Couldn't get camera binding");
-
-                    // camera_binding.update(&gpu_resources.queue, &editor.camera);
-                    // editor.update_camera_binding(&gpu_resources.queue);
-
-                    render_pass.set_bind_group(0, &camera_binding.bind_group, &[]);
-
-                    for (poly_index, polygon) in editor.polygons.iter().enumerate() {
-                        render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
-                        render_pass.set_index_buffer(
-                            polygon.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint32,
-                        );
-                        render_pass.draw_indexed(0..polygon.indices.len() as u32, 0, 0..1);
+                // for now render just the active brush stroke
+                for (stroke_index, stroke) in editor.brush_strokes.iter().enumerate() {
+                    // Only render if both buffers are initialized
+                    if let (Some(vertex_buffer), Some(index_buffer)) =
+                        (&stroke.vertex_buffer, &stroke.index_buffer)
+                    {
+                        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                        render_pass
+                            .set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..stroke.indices.len() as u32, 0, 0..1);
                     }
+                }
 
-                    // for now render just the active brush stroke
-                    for (stroke_index, stroke) in editor.brush_strokes.iter().enumerate() {
-                        // Only render if both buffers are initialized
-                        if let (Some(vertex_buffer), Some(index_buffer)) =
-                            (&stroke.vertex_buffer, &stroke.index_buffer)
-                        {
-                            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                            render_pass.set_index_buffer(
-                                index_buffer.slice(..),
-                                wgpu::IndexFormat::Uint32,
-                            );
-                            render_pass.draw_indexed(0..stroke.indices.len() as u32, 0, 0..1);
-                        }
-                    }
+                let viewport = editor.viewport.lock().unwrap();
+                let window_size = WindowSize {
+                    width: viewport.width as u32,
+                    height: viewport.height as u32,
+                };
 
-                    let viewport = editor.viewport.lock().unwrap();
-                    let window_size = WindowSize {
-                        width: viewport.width as u32,
-                        height: viewport.height as u32,
-                    };
+                // println!("Render size {:?}", window_size);
 
-                    // println!("Render size {:?}", window_size);
+                let camera = editor.camera.expect("Couldn't get camera");
 
-                    let camera = editor.camera.expect("Couldn't get camera");
+                let ndc_position = point_to_ndc(editor.last_top_left, &window_size);
+                let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
+                    &gpu_resources.device,
+                    &window_size,
+                    Point {
+                        x: ndc_position.x,
+                        y: ndc_position.y,
+                    },
+                    rgb_to_wgpu(47, 131, 222, 1.0),
+                    &camera,
+                ); // Green dot
 
-                    let ndc_position = point_to_ndc(editor.last_top_left, &window_size);
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+
+                if let Some(edge_point) = editor.hover_point {
+                    let ndc_position = point_to_ndc(edge_point.point, &window_size);
                     let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
                         &gpu_resources.device,
                         &window_size,
@@ -252,52 +293,35 @@ fn create_render_callback<'a>() -> Box<RenderCallback<'a>> {
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
-
-                    if let Some(edge_point) = editor.hover_point {
-                        let ndc_position = point_to_ndc(edge_point.point, &window_size);
-                        let (vertices, indices, vertex_buffer, index_buffer) = draw_dot(
-                            &gpu_resources.device,
-                            &window_size,
-                            Point {
-                                x: ndc_position.x,
-                                y: ndc_position.y,
-                            },
-                            rgb_to_wgpu(47, 131, 222, 1.0),
-                            &camera,
-                        ); // Green dot
-
-                        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                        render_pass
-                            .set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                        render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
-                    }
-
-                    // Draw guide lines
-                    for guide_line in &editor.guide_lines {
-                        let (vertices, indices, vertex_buffer, index_buffer) =
-                            create_guide_line_buffers(
-                                &gpu_resources.device,
-                                &window_size,
-                                guide_line.start,
-                                guide_line.end,
-                                rgb_to_wgpu(47, 131, 222, 1.0), // Blue color for guide lines
-                            );
-
-                        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                        render_pass
-                            .set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                        render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
-                    }
                 }
 
-                let command_buffer = encoder.finish();
-                gpu_resources.queue.submit(Some(command_buffer));
-                gpu_resources.device.poll(wgpu::Maintain::Poll);
-                frame.present();
-            } else {
-                println!("GPU resources not available yet");
+                // Draw guide lines
+                for guide_line in &editor.guide_lines {
+                    let (vertices, indices, vertex_buffer, index_buffer) =
+                        create_guide_line_buffers(
+                            &gpu_resources.device,
+                            &window_size,
+                            guide_line.start,
+                            guide_line.end,
+                            rgb_to_wgpu(47, 131, 222, 1.0), // Blue color for guide lines
+                        );
+
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+                }
             }
+
+            // let command_buffer = encoder.finish();
+            // gpu_resources.queue.submit(Some(command_buffer));
+            // gpu_resources.device.poll(wgpu::Maintain::Poll);
+            // frame.present();
+            // } else {
+            //     println!("GPU resources not available yet");
             // }
+            // }
+
+            (Some(encoder), Some(frame), Some(view), Some(resolve_view))
         },
     )
 }
@@ -512,7 +536,8 @@ fn handle_keyboard_input(
     }))
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let app = Application::new();
 
     // Get the primary monitor's size
@@ -612,11 +637,13 @@ fn main() {
 
         println!("Ready...");
 
-        window_handle.user_editor = Some(Box::new(cloned));
+        // window_handle.user_editor = Some(Box::new(cloned));
 
         // Receive and store GPU resources
-        match &mut window_handle.paint_state {
-            PaintState::PendingGpuResources { rx, .. } => {
+        // match &mut window_handle.paint_state {
+        //     PaintState::PendingGpuResources { rx, .. } => {
+        if let PaintState::PendingGpuResources { rx, .. } = &mut window_handle.paint_state {
+            async {
                 let gpu_resources = Arc::new(rx.recv().unwrap().unwrap());
 
                 println!("Initializing pipeline...");
@@ -758,7 +785,7 @@ fn main() {
                             },
                         });
 
-                window_handle.render_pipeline = Some(render_pipeline);
+                // window_handle.render_pipeline = Some(render_pipeline);
                 // window_handle.depth_view = gpu_helper.depth_view;
 
                 println!("Initialized...");
@@ -856,13 +883,21 @@ fn main() {
                 gpu_clonsed2.lock().unwrap().gpu_resources = Some(Arc::clone(&gpu_resources));
                 editor.gpu_resources = Some(Arc::clone(&gpu_resources));
                 window_handle.gpu_resources = Some(gpu_resources);
-                window_handle.gpu_helper = Some(gpu_clonsed2);
+                // window_handle.gpu_helper = Some(gpu_clonsed2);
                 editor.window = window_handle.window.clone();
+                window_handle.engine_handle = Some(EngineHandle {
+                    render_pipeline: Some(render_pipeline),
+                    user_editor: Some(Box::new(cloned)),
+                    gpu_helper: Some(gpu_cloned),
+                    depth_view: None,
+                });
             }
-            PaintState::Initialized { .. } => {
-                println!("Renderer is already initialized");
-            }
+            .await;
         }
+        //     PaintState::Initialized { .. } => {
+        //         println!("Renderer is already initialized");
+        //     }
+        // }
     }
 
     app.run();
